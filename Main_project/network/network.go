@@ -79,9 +79,6 @@ func UpdateElevatorStates(newPeers []string, lostPeers []string) {
 
 // **Broadcast this elevator's state to the network**
 func BroadcastElevatorStatus(e config.Elevator) {
-	txChan := make(chan ElevatorStatus, 10) // Buffered channel
-	go bcast.Transmitter(broadcastPort, txChan)
-
 	stateMutex.Lock()
 	status := ElevatorStatus{
 		ID:        config.LocalID,

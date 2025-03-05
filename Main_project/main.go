@@ -39,9 +39,8 @@ func main() {
 	// Start Peer Monitoring
 	go peer_monitor.RunMonitorPeers(peerUpdates, lostPeerChan)
 	
-	// Start Master Election + Master Monitoring
+	// Start Master Election 
 	go master_election.RunMasterElection(elevatorStateChan, masterChan, heartbeatChan)
-	go master_election.ReceiveMasterUpdates(masterChan)
 
 	// Start Network
 	go network.RunNetwork(elevatorStateChan)

@@ -1,7 +1,7 @@
 package config
 
 import (
-	"Main_project2/elevio"
+	"Main_project/elevio"
 	"os"
 )
 

@@ -1,8 +1,8 @@
-package logic
+package single_elevator
 
 import (
-	"elevator_system/config"
-	"elevator_system/elevio"
+	"Main_project/config"
+	"Main_project/elevio"
 )
 
 // **Decides next direction**

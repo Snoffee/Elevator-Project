@@ -9,8 +9,8 @@
 package network
 
 import (
-	"Main_project2/elevator_config"
-	"Main_project2/network/bcast"
+	"Main_project/config"
+	"Main_project/network/bcast"
 	"fmt"
 	"sync"
 	"time"

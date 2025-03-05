@@ -1,3 +1,3 @@
-module Main_project2
+module Main_project
 
 go 1.23.5

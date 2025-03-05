@@ -9,8 +9,8 @@
 package order_assignment
 
 import (
-	"Main_project2/elevator_config"
-	"Main_project2/network"
+	"Main_project/config"
+	"Main_project/network"
 	"fmt"
 )
 

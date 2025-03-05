@@ -1,4 +1,4 @@
-package elevio
+package single_elevator
 
 import "time"
 import "sync"

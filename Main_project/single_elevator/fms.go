@@ -1,9 +1,8 @@
-package elevator
+package single_elevator
 
 import (
-	"elevator_system/config"
-	"elevator_system/elevio"
-	"elevator_system/logic"
+	"Main_project/config"
+	"Main_project/elevio"
 	"time"
 	"fmt"
 )
@@ -37,7 +36,7 @@ func HandleStateTransition() {
 
 	switch elevator.State {
 	case config.Idle:
-		nextDir := logic.ChooseDirection(elevator)
+		nextDir := ChooseDirection(elevator)
 		fmt.Printf("ChooseDirection() returned: %v\n", nextDir) 
 		if nextDir != elevio.MD_Stop {
 			fmt.Println("Transitioning from Idle to Moving...")

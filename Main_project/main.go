@@ -1,14 +1,14 @@
 package main
 
 import (
-	"Main_project2/elevio"
-	"Main_project2/single_elevator"
-	"Main_project2/elevator_config"
-	"Main_project2/network"
-	"Main_project2/network/peers"
-	"Main_project2/master_election"
-	"Main_project2/peer_monitor"
-	"Main_project2/order_assignment"
+	"Main_project/elevio"
+	"Main_project/single_elevator"
+	"Main_project/config"
+	"Main_project/network"
+	"Main_project/network/peers"
+	"Main_project/master_election"
+	"Main_project/peer_monitor"
+	"Main_project/order_assignment"
 	"fmt"
 	"os"
 )
@@ -23,7 +23,7 @@ func main() {
 	elevio.Init("localhost:" + port, config.NumFloors)
 
 	// Initialize elevator state
-	elevator.InitElevator()
+	single_elevator.InitElevator()
 
 	// Initialize local ID
 	config.InitConfig()

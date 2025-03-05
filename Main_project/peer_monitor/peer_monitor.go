@@ -8,9 +8,9 @@
 package peer_monitor
 
 import (
-	"Main_project2/elevator_config"
-	"Main_project2/network"
-	"Main_project2/network/peers"
+	"Main_project/config"
+	"Main_project/network"
+	"Main_project/network/peers"
 	"time"
 	"fmt"
 )

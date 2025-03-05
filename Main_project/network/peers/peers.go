@@ -1,7 +1,7 @@
 package peers
 
 import (
-	"Main_project2/network/conn"
+	"Main_project/network/conn"
 	"fmt"
 	"net"
 	"sort"

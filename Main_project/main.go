@@ -39,12 +39,14 @@ func main() {
 	masterChan := make(chan string, 1)             // Master election results
 	orderAssignmentChan := make(chan int)          // Assigned orders to single elevator
 	lostPeerChan := make(chan string)				// Lost peers
+	heartbeatChan := make(chan string, 10) 			// Heartbeat channel
 
 	// **Start Peer Monitoring, Master Election, and Order Assignment**
 	go peer_monitor.RunMonitorPeers(peerUpdates, lostPeerChan)
-	go master_election.RunMasterElection(elevatorStateChan, masterChan)
+	go master_election.RunMasterElection(elevatorStateChan, masterChan, heartbeatChan)
 	go network.RunNetwork(elevatorStateChan)
 	go order_assignment.RunOrderAssignment(elevatorStateChan, masterChan, lostPeerChan, orderAssignmentChan)
+	go master_election.ReceiveMasterUpdates(masterChan)
 
 	// Start polling hardware inputs
 	go elevio.PollButtons(drv_buttons)

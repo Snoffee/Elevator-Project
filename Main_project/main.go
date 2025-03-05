@@ -29,11 +29,6 @@ func main() {
 	config.InitConfig()
 	fmt.Printf("This elevator's ID: %s\n", config.LocalID)
 
-	// Channels for hardware events
-	drv_buttons := make(chan elevio.ButtonEvent)
-	drv_floors := make(chan int)
-	drv_obstr := make(chan bool)
-
 	peerUpdates := make(chan peers.PeerUpdate)
 	elevatorStateChan := make(chan map[string]network.ElevatorStatus) // Elevator state updates
 	masterChan := make(chan string, 1)             // Master election results
@@ -41,15 +36,19 @@ func main() {
 	lostPeerChan := make(chan string)				// Lost peers
 	heartbeatChan := make(chan string, 10) 			// Heartbeat channel
 
-	// **Start Peer Monitoring, Master Election, and Order Assignment**
+	// Start Peer Monitoring
 	go peer_monitor.RunMonitorPeers(peerUpdates, lostPeerChan)
+	
+	// Start Master Election + Master Monitoring
 	go master_election.RunMasterElection(elevatorStateChan, masterChan, heartbeatChan)
-	go network.RunNetwork(elevatorStateChan)
-	go order_assignment.RunOrderAssignment(elevatorStateChan, masterChan, lostPeerChan, orderAssignmentChan)
 	go master_election.ReceiveMasterUpdates(masterChan)
 
-	// Start polling hardware inputs
-	go elevio.PollButtons(drv_buttons)
-	go elevio.PollFloorSensor(drv_floors)
-	go elevio.PollObstructionSwitch(drv_obstr)
+	// Start Network
+	go network.RunNetwork(elevatorStateChan)
+	
+	// Start Order Assignment
+	go order_assignment.RunOrderAssignment(elevatorStateChan, masterChan, lostPeerChan, orderAssignmentChan)
+	
+	// Start single_elevator
+	go single_elevator.RunSingleElevator()
 }

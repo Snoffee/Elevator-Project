@@ -29,6 +29,8 @@ func RunMasterElection(elevatorStateChan chan map[string]network.ElevatorStatus,
 	}()
 	go monitorHeartbeats(masterChan, heartbeatChan)
 	go ReceiveMasterUpdates(masterChan)
+
+	startHeartbeatSender(heartbeatChan)
 }
 
 // **Elect Master: Assign the lowest ID as master**
@@ -51,6 +53,21 @@ func electMaster(elevatorStates map[string]network.ElevatorStatus, masterChan ch
 		fmt.Printf("New Master Elected: %s\n", masterID)
 		masterChan <- masterID // Notify system
 	}
+}
+
+// **Start Sending Heartbeats When Master Is Elected**
+func startHeartbeatSender(heartbeatChan chan string) {
+    go func() {
+        for {
+            time.Sleep(500 * time.Millisecond)
+
+            stateMutex.Lock()
+            if masterID == config.LocalID { 
+                heartbeatChan <- config.LocalID // Send heartbeat only if master
+            }
+            stateMutex.Unlock()
+        }
+    }()
 }
 
 // **Monitor Heartbeats to Detect If Master Is Alive**

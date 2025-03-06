@@ -50,7 +50,6 @@ func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates ch
 				copyMap[k] = v
 			}
 			stateMutex.Unlock()
-			fmt.Println("Broadcasting elevator states...")
 			elevatorStateChan <- copyMap // Send latest elevator states to all modules
 			time.Sleep(100 * time.Millisecond) // Prevents excessive updates
 		}

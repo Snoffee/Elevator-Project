@@ -34,22 +34,21 @@ func main() {
 	masterChan := make(chan string, 1)             // Master election results
 	orderAssignmentChan := make(chan int)          // Assigned orders to single elevator
 	lostPeerChan := make(chan string)				// Lost peers
-	heartbeatChan := make(chan string, 10) 			// Heartbeat channel
+
+	// Start single_elevator
+	go single_elevator.RunSingleElevator()
 
 	// Start Peer Monitoring
 	go peer_monitor.RunMonitorPeers(peerUpdates, lostPeerChan)
 	
 	// Start Master Election 
-	go master_election.RunMasterElection(elevatorStateChan, masterChan, heartbeatChan)
+	go master_election.RunMasterElection(elevatorStateChan, masterChan)
 
 	// Start Network
 	go network.RunNetwork(elevatorStateChan, peerUpdates)
 	
 	// Start Order Assignment
 	go order_assignment.RunOrderAssignment(elevatorStateChan, masterChan, lostPeerChan, orderAssignmentChan)
-	
-	// Start single_elevator
-	go single_elevator.RunSingleElevator()
 
 	select{}
 

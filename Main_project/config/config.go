@@ -3,6 +3,9 @@ package config
 import (
 	"Main_project/elevio"
 	"os"
+	"fmt"
+	"time"
+	"math/rand"
 )
 
 type ElevatorState int
@@ -36,5 +39,13 @@ func InitConfig() {
 		LocalID = "elevator_unknown"
 	} else {
 		LocalID = "elevator_" + hostname // Example: "elevator_PC1"
+	}
+	// Allow for multiple elevators on the same machine
+	if id := os.Getenv("ELEVATOR_ID"); id != "" {
+		LocalID = id
+	} else {
+		// Add random number to LocalID to avoid conflicts
+		rand.New(rand.NewSource(time.Now().UnixNano()))
+		LocalID = fmt.Sprintf("%s_%d", LocalID, rand.Intn(1000))
 	}
 }

@@ -1,4 +1,4 @@
-# Elevator-Project
+### **Elevator-Project**
 TTK4145 Sanntidsprogramering
 
 ![alt text](Overview.png)
@@ -69,3 +69,5 @@ Set up environment variables:
 To start the elevator system:
 - go run main.go
 
+## **Single Elevator Overview**
+![alt text](single_elevator_overview.png)

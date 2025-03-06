@@ -1,9 +1,9 @@
 // In:
-// peers.PeerUpdate (tracks peer changes from the network).
+//      peerUpdateChan (from network.go) → Tracks peer changes from the network.
 
-//Out:
-// network.go (via UpdateElevatorStates()) → Updates global elevator states.
-// order_assignment.go (via lostPeerChan) → Triggers order reassignment when an elevator disconnects.
+// Out:
+//      network.go (via UpdateElevatorStates()) → Updates global elevator states.
+//      order_assignment.go (via lostPeerChan) → Triggers order reassignment when an elevator disconnects.
 
 package peer_monitor
 

@@ -1,3 +1,10 @@
+// In:
+//		Elevator state (from `fms.go` via GetElevatorState).
+//
+// Out:
+//		ChooseDirection() → Determines the next movement for the elevator.
+//		Helper functions (hasOrdersAbove(), hasOrdersBelow()) → Used in ChooseDirection().
+
 package single_elevator
 
 import (

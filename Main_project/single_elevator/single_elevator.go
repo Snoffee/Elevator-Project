@@ -1,9 +1,14 @@
+// In:
+//		assignedHallCallChan (from `order_assignment`) → Receives assigned hall calls.
+//		drv_buttons (from `elevio`) → Detects button presses.
+//		drv_floors (from `elevio`) → Detects floor arrival events.
+//		drv_obstr (from `elevio`) → Detects obstruction events.
+
+// Out:
+//		hallCallChan → Sends hall call requests to `order_assignment`.
+//		network.BroadcastElevatorStatus() → Updates other elevators on status.
+
 package single_elevator
-
-// In: 	Orders
-//		Elevator.Config
-
-// Out: Hall orders
 
 import (
 	"Main_project/elevio"  
@@ -33,10 +38,7 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 			ProcessButtonPress(buttonEvent, hallCallChan) // Handle button press event
 		
 		case assignedOrder := <-assignedHallCallChan:
-			// Execute hall call assignment received from `order_assignment`
-			elevator.Queue[assignedOrder.Floor][assignedOrder.Button] = true
-			elevio.SetButtonLamp(assignedOrder.Button, assignedOrder.Floor, true)
-			HandleStateTransition()
+			handleAssignedHallCall(assignedOrder) // Handle assigned hall call
 
 		case floorEvent := <-drv_floors:
 			ProcessFloorArrival(floorEvent) // Handle floor sensor event

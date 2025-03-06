@@ -1,3 +1,16 @@
+// In:
+//		Button press events (from `drv_buttons` in `single_elevator.go`).
+//		Floor arrival events (from `drv_floors` in `single_elevator.go`).
+//		Obstruction status (from `drv_obstr` in `single_elevator.go`).
+//		Assigned hall calls (from `order_assignment` via `assignedHallCallChan`).
+//		Hall call assignments (from `network.BroadcastHallAssignment`).
+
+// Out:
+//		hallCallChan → Sends hall call requests to `order_assignment`.
+//		Updates `elevator.Queue` when a button is pressed or assigned.
+//		Handles door opening/closing and state transitions.
+
+
 package single_elevator
 
 import (
@@ -12,8 +25,8 @@ import (
 func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.ButtonEvent) {
 	fmt.Printf("Button pressed: %+v\n", event)
 	
+	// Cab calls are handled locally
 	if event.Button == BT_Cab{
-		// Cab calls are handled locally
 		elevator.Queue[event.Floor][event.Button] = true
 		elevio.SetButtonLamp(event.Button, event.Floor, true)
 		HandleStateTransition()
@@ -64,6 +77,14 @@ func ProcessObstruction(obstructed bool) {
 			}
 		}()
 	}
+}
+
+// **Handles an assigned hall call from `order_assignment`**
+func handleAssignedHallCall(order elevio.ButtonEvent) {
+	fmt.Printf(" Received assigned hall call: Floor %d, Button %d\n", order.Floor, order.Button)
+	elevator.Queue[order.Floor][order.Button] = true
+	elevio.SetButtonLamp(order.Button, order.Floor, true)
+	HandleStateTransition()
 }
 
 // **Receive Hall Assignments from Network**

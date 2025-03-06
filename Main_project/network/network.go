@@ -1,10 +1,10 @@
 // In:
-//	peer_monitor.go (via UpdateElevatorStates()) → Updates the global elevator state map.
-//	master_election.go (via masterChan) → Updates the master ID.
-//	single_elevator.go (via BroadcastElevatorStatus()) → Sends individual elevator status updates.
+//		peer_monitor.go (via UpdateElevatorStates()) → Updates the global elevator state map.
+//		master_election.go (via masterChan) → Updates the master ID.
+//		single_elevator.go (via BroadcastElevatorStatus()) → Sends individual elevator status updates.
 
 // Out:
-//	elevatorStateChan → (Used by order_assignment.go & master_election.go) Sends the latest global elevator states.
+//		elevatorStateChan → (Used by order_assignment.go & master_election.go) Sends the latest global elevator states.
 //  	bcast.Transmitter() → Broadcasts elevator states to all nodes via UDP.
 //  	BroadcastHallAssignment() → Sends assigned hall calls over the network to all elevators.
 
@@ -116,7 +116,7 @@ func ReceiveElevatorStatus(rxChan chan ElevatorStatus) {
 
 // **Broadcasts assigned hall calls over the network**
 func BroadcastHallAssignment(elevatorID string, hallCall elevio.ButtonEvent) {
-	txChan := make(chan elevio.ButtonEvent, 10) hallCallPort
+	txChan := make(chan elevio.ButtonEvent, 10) 
 	go bcast.Transmitter(hallCallPort, txChan)
 
 	txChan <- hallCall // Send the assigned hall call to all elevators

@@ -59,12 +59,12 @@ The system is built around **Go channels**, which handle all inter-module commun
 Set up environment variables:
 
 - **Windows PowerShell**
-- $env:ELEVATOR_PORT="15657"
-- $env:ELEVATOR_ID="elevator_1"
+	- $env:ELEVATOR_PORT="15657"
+	- $env:ELEVATOR_ID="elevator_1"
 
 - **Linux (or macOS)**
-- export ELEVATOR_PORT="15657"
-- export ELEVATOR_ID="elevator_1"
+	- export ELEVATOR_PORT="15657"
+	- export ELEVATOR_ID="elevator_1"
 
 To start the elevator system:
 - go run main.go

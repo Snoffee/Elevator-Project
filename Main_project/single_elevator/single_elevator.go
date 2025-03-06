@@ -7,6 +7,8 @@ package single_elevator
 
 import (
 	"Main_project/elevio"  
+	"Main_project/network"
+	"time"
 	"fmt"
 )
 
@@ -36,5 +38,7 @@ func RunSingleElevator() {
 		case obstructionEvent := <-drv_obstr:
 			ProcessObstruction(obstructionEvent) // Handle obstruction event
 		}
+		network.BroadcastElevatorStatus(GetElevatorState())
+		time.Sleep(500 * time.Millisecond)
 	}
 }

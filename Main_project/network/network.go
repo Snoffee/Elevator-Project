@@ -11,6 +11,7 @@ package network
 import (
 	"Main_project/config"
 	"Main_project/network/bcast"
+	"Main_project/network/peers"
 	"fmt"
 	"sync"
 	"time"
@@ -37,7 +38,10 @@ var (
 )
 
 // **Start Network: Continuously Broadcast Elevator States**
-func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus) {
+func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates chan peers.PeerUpdate) {
+	// Start peer reciver to get updates from other elevators
+	go peers.Receiver(30001, peerUpdates)
+	
 	go func() {
 		for {
 			stateMutex.Lock()
@@ -46,6 +50,7 @@ func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus) {
 				copyMap[k] = v
 			}
 			stateMutex.Unlock()
+			fmt.Println("Broadcasting elevator states...")
 			elevatorStateChan <- copyMap // Send latest elevator states to all modules
 			time.Sleep(100 * time.Millisecond) // Prevents excessive updates
 		}

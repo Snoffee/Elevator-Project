@@ -2,8 +2,8 @@ package main
 
 import (
 	"Main_project/elevio"
-	"Main_project/single_elevator"
 	"Main_project/config"
+	"Main_project/single_elevator"
 	"Main_project/network"
 	"Main_project/network/peers"
 	"Main_project/master_election"
@@ -43,11 +43,12 @@ func main() {
 	go master_election.RunMasterElection(elevatorStateChan, masterChan, heartbeatChan)
 
 	// Start Network
-	go network.RunNetwork(elevatorStateChan)
+	go network.RunNetwork(elevatorStateChan, peerUpdates)
 	
 	// Start Order Assignment
 	go order_assignment.RunOrderAssignment(elevatorStateChan, masterChan, lostPeerChan, orderAssignmentChan)
 	
 	// Start single_elevator
 	go single_elevator.RunSingleElevator()
+
 }

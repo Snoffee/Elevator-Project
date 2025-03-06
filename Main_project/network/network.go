@@ -1,10 +1,12 @@
 // In:
-//		peer_monitor.go (via UpdateElevatorStates()) → Updates elevator states.
-//		master_election.go (via masterChan) → Updates master ID.
+//	peer_monitor.go (via UpdateElevatorStates()) → Updates the global elevator state map.
+//	master_election.go (via masterChan) → Updates the master ID.
+//	single_elevator.go (via BroadcastElevatorStatus()) → Sends individual elevator status updates.
 
 // Out:
-//		elevatorStateChan → (Used by order_assignment.go & master_election.go) Sends updated elevator states.
-//  	bcast.Transmitter() → Broadcasts elevator states to all nodes.
+//	elevatorStateChan → (Used by order_assignment.go & master_election.go) Sends the latest global elevator states.
+//  	bcast.Transmitter() → Broadcasts elevator states to all nodes via UDP.
+//  	BroadcastHallAssignment() → Sends assigned hall calls over the network to all elevators.
 
 package network
 
@@ -19,7 +21,8 @@ import (
 )
 
 const (
-	broadcastPort = 30000
+	broadcastPort = 30000 // Port for broadcasting elevator states
+	hallCallPort  = 30002 // Port for broadcasting assigned hall calls
 )
 
 // **Data structure for elevator status messages**
@@ -42,7 +45,8 @@ var (
 func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates chan peers.PeerUpdate) {
 	// Start peer reciver to get updates from other elevators
 	go peers.Receiver(30001, peerUpdates)
-	
+
+	// Periodically send updated elevator states to other modules
 	go func() {
 		for {
 			stateMutex.Lock()
@@ -56,15 +60,16 @@ func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates ch
 		}
 	}()
 
+	// Start broadcasting elevator states
 	go bcast.Transmitter(broadcastPort, txChan)
 }
 
-// **Update Elevator States from Peer Monitor**
+// **Updates the global elevator state when a new peer joins or an elevator disconnects**
 func UpdateElevatorStates(newPeers []string, lostPeers []string) {
 	stateMutex.Lock()
 	defer stateMutex.Unlock()
 
-	// **Add new peers**
+	// Add new elevators to the state map
 	for _, newPeer := range newPeers {
 		if _, exists := elevatorStates[newPeer]; !exists {
 			fmt.Printf("Adding new elevator %s to state map\n", newPeer)
@@ -75,7 +80,7 @@ func UpdateElevatorStates(newPeers []string, lostPeers []string) {
 		}
 	}
 
-	// **Remove lost peers**
+	// Remove lost elevators from the state map
 	for _, lostPeer := range lostPeers {
 		fmt.Printf("Removing lost elevator %s from state map\n", lostPeer)
 		delete(elevatorStates, lostPeer)
@@ -97,7 +102,7 @@ func BroadcastElevatorStatus(e config.Elevator) {
 	txChan <- status
 }
 
-// **Receive Elevator Status Updates from Other Elevators**
+// **Receives and updates elevator status messages from other elevators**
 func ReceiveElevatorStatus(rxChan chan ElevatorStatus) {
 	go bcast.Receiver(broadcastPort, rxChan)
 
@@ -109,11 +114,11 @@ func ReceiveElevatorStatus(rxChan chan ElevatorStatus) {
 	}
 }
 
-// **Broadcast Hall Assignment to the Network**
+// **Broadcasts assigned hall calls over the network**
 func BroadcastHallAssignment(elevatorID string, hallCall elevio.ButtonEvent) {
-	txChan := make(chan elevio.ButtonEvent, 10) // Buffered channel
-	go bcast.Transmitter(30002, txChan) // Use a unique port for assignments
+	txChan := make(chan elevio.ButtonEvent, 10) hallCallPort
+	go bcast.Transmitter(hallCallPort, txChan)
 
-	txChan <- hallCall // Send the assigned hall call over the network
+	txChan <- hallCall // Send the assigned hall call to all elevators
 }
 

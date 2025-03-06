@@ -2,9 +2,11 @@
 //		elevatorStateChan (from network.go) → Assigns orders dynamically.
 //		masterChan (from master_election.go) → Ensures only the master assigns orders.
 //		lostPeerChan (from peer_monitor.go) → Reassigns orders if an elevator disconnects.	
+//		hallCallChan (from single_elevator.go) 
 
 // Out:
-//		assignedHallCallChan (used by single_elevator.go) → Assigns hall calls to elevators.
+//		assignedHallCallChan (used by single_elevator.go) → Assigns hall calls to this elevator.
+//		SendHallAssignment → BroadcastHallAssignment (to network.go) (used by single_elevator.go) → Assigns hall calls to other elevators on network
 
 package order_assignment
 

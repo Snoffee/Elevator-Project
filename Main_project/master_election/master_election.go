@@ -1,8 +1,8 @@
 // In:
-//		elevatorStateChan (from network.go) → Decides the master.
-
+//	elevatorStateChan (from network.go) → Receives the latest elevator states to decide the master.
+//
 // Out:
-//		masterChan (used by network.go & order_assignment.go) → Notifies new master.
+//	masterChan (used by network.go & order_assignment.go) → Notifies all modules when a new master is elected.
 
 package master_election
 
@@ -33,7 +33,7 @@ func electMaster(elevatorStates map[string]network.ElevatorStatus, masterChan ch
 	stateMutex.Lock()
 	defer stateMutex.Unlock()
 
-	// Find lowest ID from the elevator states
+	// Find the lowest ID among active elevators
 	lowestID := config.LocalID
 	for id := range elevatorStates {
 		if id < lowestID {
@@ -41,11 +41,12 @@ func electMaster(elevatorStates map[string]network.ElevatorStatus, masterChan ch
 		}
 	}
 
-	// Prevent re-election if the master is already set correctly
+	// Avoid redundant re-election if the master remains unchanged
     if masterID == lowestID {
         return
     }
 
+	// Update and notify of new master
     masterID = lowestID
     masterVersion++
     fmt.Printf("🎖️ New Master Elected: %s (Version %d)\n", masterID, masterVersion)

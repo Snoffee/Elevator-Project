@@ -4,18 +4,21 @@
 //		lostPeerChan (from peer_monitor.go) → Reassigns orders if an elevator disconnects.	
 
 // Out:
-//		orderAssignmentChan (used by single_elevator.go) → Assigns orders to elevators.
+//		assignedHallCallChan (used by single_elevator.go) → Assigns hall calls to elevators.
 
 package order_assignment
 
 import (
 	"Main_project/config"
 	"Main_project/network"
+	"Main_project/elevio"
 	"fmt"
 )
 
 // **Run Order Assignment as a Goroutine**
-func RunOrderAssignment(elevatorStateChan chan map[string]network.ElevatorStatus, masterChan chan string, lostPeerChan chan string, orderAssignmentChan chan int) {
+func RunOrderAssignment(
+	elevatorStateChan chan map[string]network.ElevatorStatus, masterChan chan string, lostPeerChan chan string, hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent) {
+
 	go func() {
 		var latestMasterID string
 		var latestElevatorStates map[string]network.ElevatorStatus
@@ -32,7 +35,20 @@ func RunOrderAssignment(elevatorStateChan chan map[string]network.ElevatorStatus
 			case lostElevator := <-lostPeerChan:
 				fmt.Printf("Lost elevator detected: %s. Reassigning orders...\n", lostElevator)
 				if latestMasterID == config.LocalID && latestElevatorStates != nil {
-					ReassignLostOrders(lostElevator, latestElevatorStates)
+					ReassignLostOrders(lostElevator, latestElevatorStates, assignedHallCallChan)
+				}
+			case hallCall := <-hallCallChan: // Receives a hall call from single_elevator
+				if latestMasterID == config.LocalID {
+					bestElevator := AssignHallOrder(hallCall.Floor, hallCall.Button, latestElevatorStates)
+					
+					if bestElevator == config.LocalID {
+						// If this elevator was chosen, send it back to `single_elevator`
+						fmt.Printf("Assigned hall call to this elevator at floor %d\n", hallCall.Floor)
+						assignedHallCallChan <- hallCall
+					} else {
+						// If another elevator was chosen, send assignment over network
+						SendHallAssignment(bestElevator, hallCall)
+					}
 				}
 			}
 		}
@@ -40,7 +56,7 @@ func RunOrderAssignment(elevatorStateChan chan map[string]network.ElevatorStatus
 }
 
 // **Reassign orders if an elevator disconnects**
-func ReassignLostOrders(lostElevator string, elevatorStates map[string]network.ElevatorStatus) {
+func ReassignLostOrders(lostElevator string, elevatorStates map[string]network.ElevatorStatus, assignedHallCallChan chan elevio.ButtonEvent) {
 	fmt.Printf("Reassigning hall calls from elevator %s...\n", lostElevator)
 
 	// Ensure elevator exists before proceeding
@@ -55,10 +71,17 @@ func ReassignLostOrders(lostElevator string, elevatorStates map[string]network.E
 			if state, exists := elevatorStates[lostElevator]; exists && state.Queue[floor][button] {
 				fmt.Printf("Reassigning order at floor %d to a new elevator\n", floor)
 
-				bestElevator := AssignHallOrder(floor, button, elevatorStates) // Reassign order
+				bestElevator := AssignHallOrder(floor, elevio.ButtonType(button), elevatorStates) // Reassign order
 
 				if bestElevator != "" {
 					fmt.Printf("Order at floor %d successfully reassigned to %s\n", floor, bestElevator)
+					if bestElevator == config.LocalID {
+						// Send re-assigned order to this elevator
+						assignedHallCallChan <- elevio.ButtonEvent{Floor: floor, Button: elevio.ButtonType(button)}
+					} else {
+						// Otherwise, notify the chosen elevator over the network
+						SendHallAssignment(bestElevator, elevio.ButtonEvent{Floor: floor, Button: elevio.ButtonType(button)})
+					}
 				} else {
 					fmt.Printf("No available elevator for reassignment!\n")
 				}
@@ -68,7 +91,7 @@ func ReassignLostOrders(lostElevator string, elevatorStates map[string]network.E
 }
 
 // **Assign hall order to the closest available elevator**
-func AssignHallOrder(floor int, button int, elevatorStates map[string]network.ElevatorStatus) string {
+func AssignHallOrder(floor int, button elevio.ButtonType, elevatorStates map[string]network.ElevatorStatus) string {
 	fmt.Println("Available elevators:", elevatorStates)
 
 	bestElevator := ""
@@ -88,7 +111,7 @@ func AssignHallOrder(floor int, button int, elevatorStates map[string]network.El
 	// Assign the order to the best elevator
 	if bestElevator != "" {
 		fmt.Printf("Assigning hall call at floor %d to %s\n", floor, bestElevator)
-		SendHallAssignment(bestElevator, floor, button)
+		SendHallAssignment(bestElevator, elevio.ButtonEvent{Floor: floor, Button: button})
 	} else {
 		fmt.Println("No available elevator found!")
 	}
@@ -105,7 +128,10 @@ func abs(a int) int {
 }
 
 // **Send Hall Assignment Over Network**
-func SendHallAssignment(elevatorID string, floor int, button int) {
-	fmt.Printf("Sending hall order to elevator %s: Floor %d, Button %v\n", elevatorID, floor, button)
-	// Here, implement network communication to inform `single_elevator` about the order
+func SendHallAssignment(elevatorID string, hallCall elevio.ButtonEvent) {
+	fmt.Printf(" Sending hall order to elevator %s: Floor %d, Button %v\n", 
+		elevatorID, hallCall.Floor, hallCall.Button)
+
+	// Broadcast the hall order assignment to all elevators
+	go network.BroadcastHallAssignment(elevatorID, hallCall)
 }

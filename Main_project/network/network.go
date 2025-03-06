@@ -12,6 +12,7 @@ import (
 	"Main_project/config"
 	"Main_project/network/bcast"
 	"Main_project/network/peers"
+	"Main_project/elevio"
 	"fmt"
 	"sync"
 	"time"
@@ -106,5 +107,13 @@ func ReceiveElevatorStatus(rxChan chan ElevatorStatus) {
 		elevatorStates[update.ID] = update
 		stateMutex.Unlock()
 	}
+}
+
+// **Broadcast Hall Assignment to the Network**
+func BroadcastHallAssignment(elevatorID string, hallCall elevio.ButtonEvent) {
+	txChan := make(chan elevio.ButtonEvent, 10) // Buffered channel
+	go bcast.Transmitter(30002, txChan) // Use a unique port for assignments
+
+	txChan <- hallCall // Send the assigned hall call over the network
 }
 

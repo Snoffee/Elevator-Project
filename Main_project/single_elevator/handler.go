@@ -3,16 +3,24 @@ package single_elevator
 import (
 	"Main_project/config"
 	"Main_project/elevio"
+	"Main_project/network/bcast"
 	"fmt"
 	"time"
 )
 
 // **Handles button press events**
-func ProcessButtonPress(event elevio.ButtonEvent) {
+func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.ButtonEvent) {
 	fmt.Printf("Button pressed: %+v\n", event)
-	elevator.Queue[event.Floor][event.Button] = true
-	elevio.SetButtonLamp(event.Button, event.Floor, true)
-	HandleStateTransition()
+	
+	if event.Button == BT_Cab{
+		// Cab calls are handled locally
+		elevator.Queue[event.Floor][event.Button] = true
+		elevio.SetButtonLamp(event.Button, event.Floor, true)
+		HandleStateTransition()
+	} else {
+		// Hall calls are sent to 'order_assignment'
+		hallCallChan <- event
+	}
 }
 
 // **Handles floor sensor events**
@@ -57,4 +65,20 @@ func ProcessObstruction(obstructed bool) {
 		}()
 	}
 }
+
+// **Receive Hall Assignments from Network**
+func ReceiveHallAssignments(rxChan chan elevio.ButtonEvent) {
+	go bcast.Receiver(30002, rxChan) // Use the same port as `BroadcastHallAssignment`
+
+	for {
+		hallCall := <-rxChan
+		fmt.Printf("Received hall assignment: Floor %d, Button %v\n", hallCall.Floor, hallCall.Button)
+
+		// Add the order to the queue and turn on the button lamp
+		elevator.Queue[hallCall.Floor][hallCall.Button] = true
+		elevio.SetButtonLamp(hallCall.Button, hallCall.Floor, true)
+		HandleStateTransition()
+	}
+}
+
 

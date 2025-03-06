@@ -13,7 +13,7 @@ import (
 )
 
 // **Run Single Elevator Logic**
-func RunSingleElevator() {
+func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent) {
 	// Initialize elevator hardware event channels
 	drv_buttons := make(chan elevio.ButtonEvent)
 	drv_floors := make(chan int)
@@ -30,7 +30,13 @@ func RunSingleElevator() {
 	for {
 		select {
 		case buttonEvent := <-drv_buttons:
-			ProcessButtonPress(buttonEvent) // Handle button press event
+			ProcessButtonPress(buttonEvent, hallCallChan) // Handle button press event
+		
+		case assignedOrder := <-assignedHallCallChan:
+			// Execute hall call assignment received from `order_assignment`
+			elevator.Queue[assignedOrder.Floor][assignedOrder.Button] = true
+			elevio.SetButtonLamp(assignedOrder.Button, assignedOrder.Floor, true)
+			HandleStateTransition()
 
 		case floorEvent := <-drv_floors:
 			ProcessFloorArrival(floorEvent) // Handle floor sensor event

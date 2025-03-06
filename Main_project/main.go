@@ -51,4 +51,6 @@ func main() {
 	// Start single_elevator
 	go single_elevator.RunSingleElevator()
 
+	select{}
+
 }

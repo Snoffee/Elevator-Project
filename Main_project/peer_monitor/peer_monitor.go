@@ -23,17 +23,28 @@ func RunMonitorPeers(peerUpdateChan chan peers.PeerUpdate, lostPeerChan chan str
 
 // **Monitor Peers and Notify Master Election & Order Assignment**
 func monitorPeers(peerUpdateChan chan peers.PeerUpdate, lostPeerChan chan string) {
-	for update := range peerUpdateChan {
-		// Send peer updates to network.go
-		network.UpdateElevatorStates(update.New, update.Lost)
+	for {
+		select {
+		case update, ok := <-peerUpdateChan:
+			// If peerUpdates closes unexpectedly, the monitorPeers() function will exit and stop running
+			if !ok {
+				fmt.Println("peerUpdateChan closed! Restarting monitorPeers...")
+				go monitorPeers(peerUpdateChan, lostPeerChan) // Restart monitoring
+				return
+			}
 
-		// Notify Order Assignment of lost elevators
-		for _, lostPeer := range update.Lost {
-			fmt.Printf("Elevator %s disconnected!\n", lostPeer)
-			lostPeerChan <- lostPeer
+			// Handle peer updates correctly
+			fmt.Printf("Received peer update: New=%v, Lost=%v\n", update.New, update.Lost)
+			network.UpdateElevatorStates(update.New, update.Lost)
+
+			for _, lostPeer := range update.Lost {
+				fmt.Printf("Elevator %s disconnected!\n", lostPeer)
+				lostPeerChan <- lostPeer
+			}
 		}
 	}
 }
+
 
 
 // **Announce Self to the Network**

@@ -17,6 +17,7 @@ import (
 	"Main_project/config"
 	"Main_project/elevio"
 	"Main_project/network/bcast"
+	"Main_project/network"
 	"fmt"
 	"time"
 )
@@ -41,6 +42,7 @@ func ProcessFloorArrival(floor int) {
 	fmt.Printf("Floor sensor triggered: %+v\n", floor)
 	elevator.Floor = floor
 	elevio.SetFloorIndicator(floor)
+	fmt.Printf("🔄 Elevator position updated: Now at Floor %d\n", elevator.Floor)
 
 	// If an order exists at this floor, open doors
 	if elevator.Queue[floor] != [config.NumButtons]bool{false} {
@@ -54,6 +56,7 @@ func ProcessFloorArrival(floor int) {
 		for btn := 0; btn < config.NumButtons; btn++ {
 			elevio.SetButtonLamp(elevio.ButtonType(btn), floor, false)
 		}
+		network.BroadcastElevatorStatus(elevator) // Ensure master sees the update
 	}
 	HandleStateTransition()
 }

@@ -51,6 +51,9 @@ func RunOrderAssignment(
 						// If another elevator was chosen, send assignment over network
 						SendHallAssignment(bestElevator, hallCall)
 					}
+				} else {
+					// If the slave gets the hall order, send order on network
+					network.BroadcastHallAssignment(latestMasterID, hallCall)
 				}
 			}
 		}

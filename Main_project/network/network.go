@@ -99,6 +99,9 @@ func BroadcastElevatorStatus(e config.Elevator) {
 	}
 	stateMutex.Unlock()
 
+	fmt.Printf("📡 Broadcasting Elevator Status: ID=%s, Floor=%d, State=%v\n",
+		status.ID, status.Floor, status.Direction)
+
 	txChan <- status
 }
 
@@ -111,6 +114,9 @@ func ReceiveElevatorStatus(rxChan chan ElevatorStatus) {
 		stateMutex.Lock()
 		elevatorStates[update.ID] = update
 		stateMutex.Unlock()
+
+		fmt.Printf("🔄 Received Elevator Update: ID=%s, Floor=%d, State=%v\n",
+			update.ID, update.Floor, update.Direction)
 	}
 }
 

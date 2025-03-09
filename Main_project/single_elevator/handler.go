@@ -16,7 +16,7 @@ package single_elevator
 import (
 	"Main_project/config"
 	"Main_project/elevio"
-	"Main_project/network/bcast"
+	//"Main_project/network/bcast"
 	"Main_project/network"
 	"fmt"
 	"time"
@@ -91,11 +91,11 @@ func handleAssignedHallCall(order elevio.ButtonEvent) {
 }
 
 // **Receive Hall Assignments from Network**
-func ReceiveHallAssignments(rxChan chan elevio.ButtonEvent) {
-	go bcast.Receiver(30002, rxChan) // Use the same port as `BroadcastHallAssignment`
+func ReceiveHallAssignments(hallCallChan chan elevio.ButtonEvent) {
+	//go bcast.Receiver(30002, hallCallChan) // Use the same port as `BroadcastHallAssignment`
 
 	for {
-		hallCall := <-rxChan
+		hallCall := <-hallCallChan
 		fmt.Printf("Received hall assignment: Floor %d, Button %v\n", hallCall.Floor, hallCall.Button)
 
 		// Add the order to the queue and turn on the button lamp

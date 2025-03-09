@@ -45,7 +45,7 @@ func main() {
 	go master_election.RunMasterElection(elevatorStateChan, masterChan)
 
 	// Start Network
-	go network.RunNetwork(elevatorStateChan, peerUpdates)
+	go network.RunNetwork(elevatorStateChan, peerUpdates, hallCallChan, assignedHallCallChan)
 	
 	// Start Order Assignment
 	go order_assignment.RunOrderAssignment(elevatorStateChan, masterChan, lostPeerChan, hallCallChan, assignedHallCallChan)

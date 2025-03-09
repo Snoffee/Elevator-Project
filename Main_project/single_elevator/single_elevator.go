@@ -31,6 +31,8 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 
 	fmt.Println("Single Elevator Module Running...")
 
+	go ReceiveHallAssignments(assignedHallCallChan) // Listen for network hall calls
+
 	// Event Loop
 	for {
 		select {

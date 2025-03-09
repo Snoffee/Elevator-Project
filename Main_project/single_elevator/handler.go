@@ -26,7 +26,7 @@ func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.Butto
 	fmt.Printf("Button pressed: %+v\n", event)
 	
 	// Cab calls are handled locally
-	if event.Button == BT_Cab{
+	if event.Button == elevio.BT_Cab{
 		elevator.Queue[event.Floor][event.Button] = true
 		elevio.SetButtonLamp(event.Button, event.Floor, true)
 		HandleStateTransition()

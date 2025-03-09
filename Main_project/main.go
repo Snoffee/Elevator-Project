@@ -24,7 +24,6 @@ func main() {
 
 	// Initialize elevator state
 	single_elevator.InitElevator()
-
 	// Initialize local ID
 	config.InitConfig()
 	fmt.Printf("This elevator's ID: %s\n", config.LocalID)

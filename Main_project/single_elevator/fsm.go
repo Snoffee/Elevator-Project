@@ -24,6 +24,7 @@ func GetElevatorState() config.Elevator {
 
 // **Initialize Elevator**
 func InitElevator() {
+
 	elevator = config.Elevator{
 		Floor:      0,
 		Direction:  elevio.MD_Stop,
@@ -31,6 +32,23 @@ func InitElevator() {
 		Obstructed: false,
 		Queue:      [config.NumFloors][config.NumButtons]bool{}, 
 	}
+	//Correctly sets current floor
+	floor := elevio.GetFloor()
+	fmt.Printf("Read initial floor as %v\n", floor)
+	switch floor{
+	case -1:
+		for elevio.GetFloor() != 0{
+			elevio.SetMotorDirection(elevio.MD_Down)
+		}
+		elevio.SetMotorDirection(elevio.MD_Stop)
+		fmt.Printf("My motordirection is: %v\n", elevator.Direction)
+		elevator.Floor = 0
+		
+	default:
+		elevator.Floor = elevio.GetFloor()
+	}
+	fmt.Printf("I'm starting at floor %v\n", elevator.Floor)
+
 }
 
 // **Handles state transitions**

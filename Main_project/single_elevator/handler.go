@@ -33,7 +33,11 @@ func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.Butto
 		HandleStateTransition()
 	} else {
 		// Hall calls are sent to 'order_assignment'
-		hallCallChan <- event
+		// Check if this hall call is already active
+        if !elevator.Queue[event.Floor][event.Button] {
+            elevator.Queue[event.Floor][event.Button] = true  // Mark as active
+            hallCallChan <- event
+		}
 	}
 }
 
@@ -91,17 +95,21 @@ func handleAssignedHallCall(order elevio.ButtonEvent) {
 }
 
 // **Receive Hall Assignments from Network**
-func ReceiveHallAssignments(hallCallChan chan elevio.ButtonEvent) {
+func ReceiveHallAssignments(assignedNetworkHallCallChan chan network.HallAssignmentMessage) {
 	//go bcast.Receiver(30002, hallCallChan) // Use the same port as `BroadcastHallAssignment`
 
 	for {
-		hallCall := <-hallCallChan
-		fmt.Printf("Received hall assignment: Floor %d, Button %v\n", hallCall.Floor, hallCall.Button)
-
-		// Add the order to the queue and turn on the button lamp
-		elevator.Queue[hallCall.Floor][hallCall.Button] = true
-		elevio.SetButtonLamp(hallCall.Button, hallCall.Floor, true)
-		HandleStateTransition()
+		msg := <-assignedNetworkHallCallChan
+        // Only process the message if it is intended for this elevator.
+        if msg.TargetID == config.LocalID {
+            fmt.Printf("Received hall assignment for me: Floor %d, Button %v\n", msg.Floor, msg.Button)
+            // Convert to a ButtonEvent if necessary and handle it.
+            event := elevio.ButtonEvent{Floor: msg.Floor, Button: msg.Button}
+            handleAssignedHallCall(event)
+        } else {
+            // Optionally log that the message was not for this elevator.
+            fmt.Printf("Ignored hall assignment for elevator %s\n", msg.TargetID)
+        }
 	}
 }
 

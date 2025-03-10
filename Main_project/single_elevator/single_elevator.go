@@ -11,10 +11,11 @@
 package single_elevator
 
 import (
-	"Main_project/elevio"  
+	"Main_project/elevio"
 	"Main_project/network"
-	"time"
+	"Main_project/network/bcast"
 	"fmt"
+	"time"
 )
 
 // **Run Single Elevator Logic**
@@ -31,7 +32,25 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 
 	fmt.Println("Single Elevator Module Running...")
 
-	go ReceiveHallAssignments(assignedHallCallChan) // Listen for network hall calls
+	// Start the receiver to listen for hall assignments
+	assignedNetworkHallCallChan  := make(chan network.HallAssignmentMessage, 10) 
+	go bcast.Receiver(30002, assignedNetworkHallCallChan)
+
+	// Create a channel to receive raw hall calls.
+	rawHallCallChan := make(chan elevio.ButtonEvent, 10)
+	go bcast.Receiver(30003, rawHallCallChan)
+
+	// Merge Raw hall calls into main hall call channel
+	go func() {
+		for {
+			event := <-rawHallCallChan
+			if !elevator.Queue[event.Floor][event.Button] { // Check if already registered
+				hallCallChan <- event
+			}
+		}
+	}()
+
+	go ReceiveHallAssignments(assignedNetworkHallCallChan) // Listen for network hall calls
 
 	// Event Loop
 	for {
@@ -40,7 +59,7 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 			ProcessButtonPress(buttonEvent, hallCallChan) // Handle button press event
 		
 		case assignedOrder := <-assignedHallCallChan:
-			handleAssignedHallCall(assignedOrder) // Handle assigned hall call
+			handleAssignedHallCall(assignedOrder) // Handle local assigned hall call
 
 		case floorEvent := <-drv_floors:
 			ProcessFloorArrival(floorEvent) // Handle floor sensor event

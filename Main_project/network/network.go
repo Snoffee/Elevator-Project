@@ -22,7 +22,9 @@ import (
 
 const (
 	broadcastPort = 30000 // Port for broadcasting elevator states
+	peerPort      = 30001 // Port for receiving elevator state updates
 	hallCallPort  = 30002 // Port for broadcasting assigned hall calls
+	rawHallCallPort = 30003 // Port for raw hall calls (hall calls received by slaves)
 )
 
 // **Data structure for elevator status messages**
@@ -34,17 +36,25 @@ type ElevatorStatus struct {
 	Timestamp time.Time
 }
 
+type HallAssignmentMessage struct {
+	TargetID string
+	Floor    int
+	Button   elevio.ButtonType
+}
+
 var (
 	elevatorStates = make(map[string]ElevatorStatus) // Global map to track all known elevators
 	stateMutex		sync.Mutex
 	txChan			= make(chan ElevatorStatus, 10) // Global transmitter channel
 	rxChan 			= make(chan ElevatorStatus, 10) // Global receiver channel
+	txHallCallChan  = make(chan HallAssignmentMessage, 10) // Global channel for hall assignments
+	txRawHallCallChan = make(chan elevio.ButtonEvent, 10) // Raw hall call events
 )
 
 // **Start Network: Continuously Broadcast Elevator States**
-func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates chan peers.PeerUpdate, hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent) {
+func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates chan peers.PeerUpdate) {
 	// Start peer reciver to get updates from other elevators
-	go peers.Receiver(30001, peerUpdates)
+	go peers.Receiver(peerPort, peerUpdates)
 
 	// Periodically send updated elevator states to other modules
 	go func() {
@@ -66,9 +76,12 @@ func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates ch
 	// Start elevator status receiver
 	go ReceiveElevatorStatus(rxChan)
 
-	// Start broadcasting and receiving hall call assignments
-	go bcast.Transmitter(hallCallPort, assignedHallCallChan)
-	go bcast.Receiver(hallCallPort, hallCallChan)
+	// Start broadcasting hall calls
+	go bcast.Transmitter(hallCallPort, txHallCallChan)
+
+	// Start broadcasting raw hall calls
+	go bcast.Transmitter(rawHallCallPort, txRawHallCallChan)
+
 }
 
 // **Updates the global elevator state when a new peer joins or an elevator disconnects**
@@ -117,20 +130,39 @@ func ReceiveElevatorStatus(rxChan chan ElevatorStatus) {
 	go bcast.Receiver(broadcastPort, rxChan)
 
 	for {
-		update := <-rxChan
+		hallAssignment := <-rxChan
 		fmt.Printf("🔄 Received Broadcast: ID=%s, Floor=%d, State=%v\n", 
-			update.ID, update.Floor, update.Direction)
+			hallAssignment.ID, hallAssignment.Floor, hallAssignment.Direction)
 
 		stateMutex.Lock()
-		elevatorStates[update.ID] = update
+		elevatorStates[hallAssignment.ID] = hallAssignment
 		stateMutex.Unlock()
 	}
 }
 
 // **Broadcasts assigned hall calls over the network**
-func BroadcastHallAssignment(assignedHallCallChan chan elevio.ButtonEvent, hallCall elevio.ButtonEvent) {
-	fmt.Printf("📡 Broadcasting assigned hall call: Floor=%d, Button=%d\n", hallCall.Floor, hallCall.Button)
+//func BroadcastHallAssignment(elevatorID string, hallCall elevio.ButtonEvent) {
+//	txChan := make(chan elevio.ButtonEvent, 10) 
+//	go bcast.Transmitter(hallCallPort, txChan)
+//
+//	txChan <- hallCall // Send the assigned hall call to all elevators
+//}
 
-	assignedHallCallChan <- hallCall // Send the assigned hall call to all elevators
+// Send hall assignment to a specific elevator
+func SendHallAssignment(targetElevator string, floor int, button elevio.ButtonType) {
+	fmt.Printf("Sending hall assignment to %s for floor %d\n", targetElevator, floor)
+
+	hallCall := HallAssignmentMessage{
+		TargetID: targetElevator,
+		Floor:    floor,
+		Button:   button,
+	}
+
+	txHallCallChan <- hallCall
 }
 
+// SendRawHallCall sends a raw hall call event over the network.
+func SendRawHallCall(hallCall elevio.ButtonEvent) {
+    //fmt.Printf("Sending raw hall call: Floor %d, Button %v\n", hallCall.Floor, hallCall.Button)
+    txRawHallCallChan <- hallCall
+}

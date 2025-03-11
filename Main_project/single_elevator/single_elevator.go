@@ -37,35 +37,31 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 	go bcast.Receiver(30002, assignedNetworkHallCallChan) // hallCallPort
 
 	// Create a channel to receive raw hall calls.
-	rawHallCallChan := make(chan elevio.ButtonEvent, 10)
+	rawHallCallChan := make(chan network.RawHallCallMessage, 10)
 	go bcast.Receiver(30003, rawHallCallChan) // rawHallCallPort
 
-	// Merge Raw hall calls into main hall call channel
-	go func() {
-		for {
-			event := <-rawHallCallChan
-			if !elevator.Queue[event.Floor][event.Button] { // Check if already registered
-				hallCallChan <- event
-			}
-		}
-	}()
 
 	go ReceiveHallAssignments(assignedNetworkHallCallChan) // Listen for network hall calls
 
 	// Event Loop
 	for {
 		select {
+		// Hardware
 		case buttonEvent := <-drv_buttons:
 			ProcessButtonPress(buttonEvent, hallCallChan) // Handle button press event
 		
-		case assignedOrder := <-assignedHallCallChan:
-			handleAssignedHallCall(assignedOrder) // Handle local assigned hall call
-
 		case floorEvent := <-drv_floors:
 			ProcessFloorArrival(floorEvent) // Handle floor sensor event
 
 		case obstructionEvent := <-drv_obstr:
 			ProcessObstruction(obstructionEvent) // Handle obstruction event
+		
+		// Hall calls
+		case assignedOrder := <-assignedHallCallChan:
+			handleAssignedHallCall(assignedOrder) // Handle local assigned hall call
+		
+		case rawCall := <-rawHallCallChan:
+			handleAssignedRawHallCall(rawCall, hallCallChan) // Handle global assigned hall call
 		}
 		network.BroadcastElevatorStatus(GetElevatorState())
 		time.Sleep(500 * time.Millisecond)

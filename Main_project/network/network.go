@@ -42,13 +42,19 @@ type HallAssignmentMessage struct {
 	Button   elevio.ButtonType
 }
 
+type RawHallCallMessage struct {
+    TargetID string
+    Floor    int
+    Button   elevio.ButtonType
+}
+
 var (
 	elevatorStates = make(map[string]ElevatorStatus) // Global map to track all known elevators
 	stateMutex		sync.Mutex
 	txChan			= make(chan ElevatorStatus, 10) // Global transmitter channel
 	rxChan 			= make(chan ElevatorStatus, 10) // Global receiver channel
 	txHallCallChan  = make(chan HallAssignmentMessage, 10) // Global channel for hall assignments
-	txRawHallCallChan = make(chan elevio.ButtonEvent, 10) // Raw hall call events
+	txRawHallCallChan = make(chan RawHallCallMessage, 10) // Raw hall call events
 )
 
 // **Start Network: Continuously Broadcast Elevator States**
@@ -151,6 +157,24 @@ func SendHallAssignment(targetElevator string, floor int, button elevio.ButtonTy
 
 // **SendRawHallCall sends a raw hall call event over the network**
 // hall calls received by slaves need to be broadcasted to master for assignment
-func SendRawHallCall(hallCall elevio.ButtonEvent) {
-    txRawHallCallChan <- hallCall
+// Send to master only (with retry)
+func SendRawHallCall(masterID string, hallCall elevio.ButtonEvent) {
+    if masterID == "" {
+        // No master known – fall back to broadcasting to all
+        txRawHallCallChan <- RawHallCallMessage{TargetID: "", Floor: hallCall.Floor, Button: hallCall.Button}
+        return
+    }
+    if config.LocalID == masterID {
+        // This node is the master – no need to forward the call
+        return
+    }
+    // Send hall call directly to the current master
+    msg := RawHallCallMessage{TargetID: masterID, Floor: hallCall.Floor, Button: hallCall.Button}
+    txRawHallCallChan <- msg
+
+    // Start a brief timeout to retry if master doesn’t respond quickly
+    go func(call RawHallCallMessage) {
+        time.Sleep(100 * time.Millisecond)          // small delay before retry
+        txRawHallCallChan <- call                   // resend the hall call to master
+    }(msg)
 }

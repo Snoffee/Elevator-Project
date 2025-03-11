@@ -94,6 +94,20 @@ func handleAssignedHallCall(order elevio.ButtonEvent) {
 	HandleStateTransition()
 }
 
+// **Handles an assigned raw hall call from the network**
+func handleAssignedRawHallCall(rawCall network.RawHallCallMessage, hallCallChan chan elevio.ButtonEvent) {
+    // Ignore calls not meant for this elevator
+    if rawCall.TargetID != "" && rawCall.TargetID != config.LocalID {
+        return
+    }
+    
+    // Only process if it's not already in the queue
+    if !elevator.Queue[rawCall.Floor][rawCall.Button] {
+        fmt.Printf("Processing raw hall call: Floor %d, Button %d\n", rawCall.Floor, rawCall.Button)
+        hallCallChan <- elevio.ButtonEvent{Floor: rawCall.Floor, Button: rawCall.Button}
+    }
+}
+
 // **Receive Hall Assignments from Network**
 // If the best elevator was another elevator on the network the order gets sent here
 func ReceiveHallAssignments(assignedNetworkHallCallChan chan network.HallAssignmentMessage) {

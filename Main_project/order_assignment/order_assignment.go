@@ -42,23 +42,19 @@ func RunOrderAssignment(
 			case hallCall := <-hallCallChan: // Receives a hall call from single_elevator
 				if latestMasterID == config.LocalID {
 					// Check if the hall call is already assigned
-					bestElevator := AssignHallOrder(hallCall.Floor, hallCall.Button, latestElevatorStates)
-					if !latestElevatorStates[bestElevator].Queue[hallCall.Floor][hallCall.Button] {
-						
-						if bestElevator == config.LocalID {
-							// If this elevator was chosen, send it back to `single_elevator`
-							fmt.Printf("Assigned hall call to this elevator at floor %d\n\n", hallCall.Floor)
-							assignedHallCallChan <- hallCall
-						} else {
-							// If another elevator was chosen, send assignment over network
-							network.SendHallAssignment(bestElevator, hallCall.Floor, hallCall.Button)
-						}
+					bestElevator := AssignHallOrder(hallCall.Floor, hallCall.Button, latestElevatorStates)						
+					
+					if bestElevator == config.LocalID {
+						// If this elevator was chosen, send it back to `single_elevator`
+						fmt.Printf("Assigned hall call to this elevator at floor %d\n\n", hallCall.Floor)
+						assignedHallCallChan <- hallCall
 					} else {
-						fmt.Printf("Ignoring duplicate assignment of hall call at floor %d\n\n", hallCall.Floor)
+						// If another elevator was chosen, send assignment over network
+						network.SendHallAssignment(bestElevator, hallCall.Floor, hallCall.Button)
 					}
 				} else {
 					// If the slave gets the hall order, send order on network (Forwarding hall call to master)
-					network.SendRawHallCall(hallCall)
+					network.SendRawHallCall(latestMasterID, hallCall)
 				}
 			}
 		}
@@ -119,15 +115,6 @@ func AssignHallOrder(floor int, button elevio.ButtonType, elevatorStates map[str
 		}
 	}
 	fmt.Println()
-
-	// Assign the order to the best elevator
-	if bestElevator != "" {
-		fmt.Printf("Assigning hall call at floor %d to %s\n\n", floor, bestElevator)
-		network.SendHallAssignment(bestElevator, floor, button)
-
-	} else {
-		fmt.Println("No available elevator found!")
-	}
 
 	return bestElevator
 }

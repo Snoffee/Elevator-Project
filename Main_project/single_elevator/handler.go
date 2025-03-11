@@ -16,7 +16,6 @@ package single_elevator
 import (
 	"Main_project/config"
 	"Main_project/elevio"
-	//"Main_project/network/bcast"
 	"Main_project/network"
 	"fmt"
 	"time"
@@ -24,7 +23,7 @@ import (
 
 // **Handles button press events**
 func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.ButtonEvent) {
-	fmt.Printf("Button pressed: %+v\n", event)
+	fmt.Printf("Button pressed: %+v\n\n", event)
 	
 	// Cab calls are handled locally
 	if event.Button == elevio.BT_Cab{
@@ -46,7 +45,7 @@ func ProcessFloorArrival(floor int) {
 	fmt.Printf("Floor sensor triggered: %+v\n", floor)
 	elevator.Floor = floor
 	elevio.SetFloorIndicator(floor)
-	fmt.Printf("🔄 Elevator position updated: Now at Floor %d\n", elevator.Floor)
+	fmt.Printf("Elevator position updated: Now at Floor %d\n\n", elevator.Floor)
 
 	// If an order exists at this floor, open doors
 	if elevator.Queue[floor] != [config.NumButtons]bool{false} {
@@ -55,7 +54,7 @@ func ProcessFloorArrival(floor int) {
 		elevio.SetMotorDirection(elevio.MD_Stop)
 		elevio.SetDoorOpenLamp(true)
 
-		// **Turn off button lights after servicing**
+		// Turn off button lights after servicing
 		elevator.Queue[floor] = [config.NumButtons]bool{false}
 		for btn := 0; btn < config.NumButtons; btn++ {
 			elevio.SetButtonLamp(elevio.ButtonType(btn), floor, false)
@@ -87,29 +86,26 @@ func ProcessObstruction(obstructed bool) {
 }
 
 // **Handles an assigned hall call from `order_assignment`**
+// If the best elevator is itself, the order gets sent here
 func handleAssignedHallCall(order elevio.ButtonEvent) {
-	fmt.Printf(" Received assigned hall call: Floor %d, Button %d\n", order.Floor, order.Button)
+	fmt.Printf(" Received assigned hall call: Floor %d, Button %d\n\n", order.Floor, order.Button)
 	elevator.Queue[order.Floor][order.Button] = true
 	elevio.SetButtonLamp(order.Button, order.Floor, true)
 	HandleStateTransition()
 }
 
 // **Receive Hall Assignments from Network**
+// If the best elevator was another elevator on the network the order gets sent here
 func ReceiveHallAssignments(assignedNetworkHallCallChan chan network.HallAssignmentMessage) {
-	//go bcast.Receiver(30002, hallCallChan) // Use the same port as `BroadcastHallAssignment`
-
 	for {
 		msg := <-assignedNetworkHallCallChan
         // Only process the message if it is intended for this elevator.
         if msg.TargetID == config.LocalID {
-            fmt.Printf("Received hall assignment for me: Floor %d, Button %v\n", msg.Floor, msg.Button)
-            // Convert to a ButtonEvent if necessary and handle it.
+            fmt.Printf("Received hall assignment for me from network: Floor %d, Button %v\n\n", msg.Floor, msg.Button)
+            // Convert to a ButtonEvent and handle it.
             event := elevio.ButtonEvent{Floor: msg.Floor, Button: msg.Button}
             handleAssignedHallCall(event)
-        } else {
-            // Optionally log that the message was not for this elevator.
-            fmt.Printf("Ignored hall assignment for elevator %s\n", msg.TargetID)
-        }
+        } 
 	}
 }
 

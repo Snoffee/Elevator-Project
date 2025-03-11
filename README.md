@@ -71,3 +71,6 @@ To start the elevator system:
 
 ## **Single Elevator Overview**
 ![alt text](single_elevator_overview.png)
+
+## **Request handling**
+![alt text](Request_handling.png)

@@ -85,6 +85,7 @@ func HandleStateTransition() {
 			}
 		}()
 	}
+	fmt.Println()
 }
 
 

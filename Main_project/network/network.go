@@ -24,7 +24,7 @@ const (
 	broadcastPort = 30000 // Port for broadcasting elevator states
 	peerPort      = 30001 // Port for receiving elevator state updates
 	hallCallPort  = 30002 // Port for broadcasting assigned hall calls
-	rawHallCallPort = 30003 // Port for raw hall calls (hall calls received by slaves)
+	rawHallCallPort = 30003 // Port for raw hall calls (hall calls received by slaves, that needs to be forwarded to the master before assigning them)
 )
 
 // **Data structure for elevator status messages**
@@ -119,9 +119,6 @@ func BroadcastElevatorStatus(e config.Elevator) {
 	}
 	stateMutex.Unlock()
 
-	fmt.Printf("📡 Broadcasting Elevator Status: ID=%s, Floor=%d, State=%v\n",
-		status.ID, status.Floor, status.Direction)
-
 	txChan <- status
 }
 
@@ -131,8 +128,6 @@ func ReceiveElevatorStatus(rxChan chan ElevatorStatus) {
 
 	for {
 		hallAssignment := <-rxChan
-		fmt.Printf("🔄 Received Broadcast: ID=%s, Floor=%d, State=%v\n", 
-			hallAssignment.ID, hallAssignment.Floor, hallAssignment.Direction)
 
 		stateMutex.Lock()
 		elevatorStates[hallAssignment.ID] = hallAssignment
@@ -141,13 +136,6 @@ func ReceiveElevatorStatus(rxChan chan ElevatorStatus) {
 }
 
 // **Broadcasts assigned hall calls over the network**
-//func BroadcastHallAssignment(elevatorID string, hallCall elevio.ButtonEvent) {
-//	txChan := make(chan elevio.ButtonEvent, 10) 
-//	go bcast.Transmitter(hallCallPort, txChan)
-//
-//	txChan <- hallCall // Send the assigned hall call to all elevators
-//}
-
 // Send hall assignment to a specific elevator
 func SendHallAssignment(targetElevator string, floor int, button elevio.ButtonType) {
 	fmt.Printf("Sending hall assignment to %s for floor %d\n", targetElevator, floor)
@@ -161,8 +149,8 @@ func SendHallAssignment(targetElevator string, floor int, button elevio.ButtonTy
 	txHallCallChan <- hallCall
 }
 
-// SendRawHallCall sends a raw hall call event over the network.
+// **SendRawHallCall sends a raw hall call event over the network**
+// hall calls received by slaves need to be broadcasted to master for assignment
 func SendRawHallCall(hallCall elevio.ButtonEvent) {
-    //fmt.Printf("Sending raw hall call: Floor %d, Button %v\n", hallCall.Floor, hallCall.Button)
     txRawHallCallChan <- hallCall
 }

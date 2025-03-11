@@ -49,6 +49,6 @@ func electMaster(elevatorStates map[string]network.ElevatorStatus, masterChan ch
 	// Update and notify of new master
     masterID = lowestID
     masterVersion++
-    fmt.Printf("🎖️ New Master Elected: %s (Version %d)\n", masterID, masterVersion)
+    fmt.Printf("New Master Elected: %s (Version %d)\n\n", masterID, masterVersion)
     masterChan <- masterID
 }

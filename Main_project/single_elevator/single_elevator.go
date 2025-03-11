@@ -34,11 +34,11 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 
 	// Start the receiver to listen for hall assignments
 	assignedNetworkHallCallChan  := make(chan network.HallAssignmentMessage, 10) 
-	go bcast.Receiver(30002, assignedNetworkHallCallChan)
+	go bcast.Receiver(30002, assignedNetworkHallCallChan) // hallCallPort
 
 	// Create a channel to receive raw hall calls.
 	rawHallCallChan := make(chan elevio.ButtonEvent, 10)
-	go bcast.Receiver(30003, rawHallCallChan)
+	go bcast.Receiver(30003, rawHallCallChan) // rawHallCallPort
 
 	// Merge Raw hall calls into main hall call channel
 	go func() {

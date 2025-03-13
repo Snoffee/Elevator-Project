@@ -41,12 +41,10 @@ func electMaster(elevatorStates map[string]network.ElevatorStatus, masterChan ch
 		}
 	}
 
-	// Avoid redundant re-election if the master remains unchanged
     if masterID == lowestID {
         return
     }
 
-	// Update and notify of new master
     masterID = lowestID
     masterVersion++
     fmt.Printf("New Master Elected: %s (Version %d)\n\n", masterID, masterVersion)

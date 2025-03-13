@@ -135,23 +135,9 @@ func ReceiveElevatorStatus(rxChan chan ElevatorStatus) {
 	}
 }
 
-// **Broadcast cab assignment over the network**
-func SendCabAssignment(targetElevator string, floor int) {
-	fmt.Printf("Sending cab assignment to %s for floor %d\n", targetElevator, floor)
-
-	cabCall := AssignmentMessage{
-		TargetID: targetElevator,
-		Floor:    floor,
-		Button:   elevio.BT_Cab, 
-	}
-
-	txAssignmentChan <- cabCall
-}
-
-// **Broadcasts assigned hall calls over the network**
-// Send hall assignment to a specific elevator
-func SendHallAssignment(targetElevator string, floor int, button elevio.ButtonType) {
-	fmt.Printf("Sending hall assignment to %s for floor %d\n", targetElevator, floor)
+// **Broadcasts assigned assignments over the network**
+func SendAssignment(targetElevator string, floor int, button elevio.ButtonType) {
+	fmt.Printf("Sending assignment to %s for floor %d\n", targetElevator, floor)
 
 	hallCall := AssignmentMessage{
 		TargetID: targetElevator,

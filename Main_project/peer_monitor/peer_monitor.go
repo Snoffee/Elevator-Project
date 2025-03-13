@@ -16,20 +16,20 @@ import (
 )
 
 // **Runs MonitorPeers as a Goroutine**
-func RunMonitorPeers(peerUpdateChan chan peers.PeerUpdate, lostPeerChan chan string) {
-	go monitorPeers(peerUpdateChan, lostPeerChan)
+func RunMonitorPeers(peerUpdateChan chan peers.PeerUpdate, lostPeerChan chan string, newPeerChan chan string) {
+	go monitorPeers(peerUpdateChan, lostPeerChan, newPeerChan)
 	go announceSelf()
 }
 
 // **Monitor Peers and Notify Master Election & Order Assignment**
-func monitorPeers(peerUpdateChan chan peers.PeerUpdate, lostPeerChan chan string) {
+func monitorPeers(peerUpdateChan chan peers.PeerUpdate, lostPeerChan chan string, newPeerChan chan string) {
 	for {
 		select {
 		case update, ok := <-peerUpdateChan:
 			// If peerUpdates closes unexpectedly, the monitorPeers() function will exit and stop running
 			if !ok {
 				fmt.Println("peerUpdateChan closed! Restarting monitorPeers...")
-				go monitorPeers(peerUpdateChan, lostPeerChan) // Restart monitoring
+				go monitorPeers(peerUpdateChan, lostPeerChan, newPeerChan) // Restart monitoring
 				return
 			}
 
@@ -37,9 +37,15 @@ func monitorPeers(peerUpdateChan chan peers.PeerUpdate, lostPeerChan chan string
 			fmt.Printf("Received peer update: New=%v, Lost=%v\n", update.New, update.Lost)
 			network.UpdateElevatorStates(update.New, update.Lost)
 
+			// Notify about lost elevators
 			for _, lostPeer := range update.Lost {
 				fmt.Printf("Elevator %s disconnected!\n", lostPeer)
 				lostPeerChan <- lostPeer
+			}
+			// Notify about newly joined elevators
+			for _, newPeer := range update.New {
+				fmt.Printf("Elevator %s has joined!\n", newPeer)
+				newPeerChan <- newPeer
 			}
 		}
 	}

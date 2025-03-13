@@ -33,7 +33,7 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 	fmt.Println("Single Elevator Module Running...")
 
 	// Start the receiver to listen for hall assignments
-	assignedNetworkHallCallChan  := make(chan network.HallAssignmentMessage, 10) 
+	assignedNetworkHallCallChan  := make(chan network.AssignmentMessage, 10) 
 	go bcast.Receiver(30002, assignedNetworkHallCallChan) // hallCallPort
 
 	// Create a channel to receive raw hall calls.

@@ -36,7 +36,7 @@ type ElevatorStatus struct {
 	Timestamp time.Time
 }
 
-type HallAssignmentMessage struct {
+type AssignmentMessage struct {
 	TargetID string
 	Floor    int
 	Button   elevio.ButtonType
@@ -49,12 +49,12 @@ type RawHallCallMessage struct {
 }
 
 var (
-	elevatorStates = make(map[string]ElevatorStatus) // Global map to track all known elevators
-	stateMutex		sync.Mutex
-	txChan			= make(chan ElevatorStatus, 10) // Global transmitter channel
-	rxChan 			= make(chan ElevatorStatus, 10) // Global receiver channel
-	txHallCallChan  = make(chan HallAssignmentMessage, 10) // Global channel for hall assignments
-	txRawHallCallChan = make(chan RawHallCallMessage, 10) // Raw hall call events
+	elevatorStates    	 = make(map[string]ElevatorStatus) // Global map to track all known elevators
+	stateMutex			 sync.Mutex
+	txElevatorStatusChan = make(chan ElevatorStatus, 10) // Global transmitter channel
+	rxElevatorStatusChan = make(chan ElevatorStatus, 10) // Global receiver channel
+	txAssignmentChan  	 = make(chan AssignmentMessage, 10) // Global channel for hall assignments
+	txRawHallCallChan	 = make(chan RawHallCallMessage, 10) // Raw hall call events
 )
 
 // **Start Network: Continuously Broadcast Elevator States**
@@ -77,13 +77,13 @@ func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates ch
 	}()
 
 	// Start broadcasting elevator states
-	go bcast.Transmitter(broadcastPort, txChan)
+	go bcast.Transmitter(broadcastPort, txElevatorStatusChan)
 
 	// Start elevator status receiver
-	go ReceiveElevatorStatus(rxChan)
+	go ReceiveElevatorStatus(rxElevatorStatusChan)
 
 	// Start broadcasting hall calls
-	go bcast.Transmitter(hallCallPort, txHallCallChan)
+	go bcast.Transmitter(hallCallPort, txAssignmentChan)
 
 	// Start broadcasting raw hall calls
 	go bcast.Transmitter(rawHallCallPort, txRawHallCallChan)
@@ -119,7 +119,7 @@ func BroadcastElevatorStatus(e config.Elevator) {
 	}
 	stateMutex.Unlock()
 
-	txChan <- status
+	txElevatorStatusChan <- status
 }
 
 // **Receives and updates elevator status messages from other elevators**
@@ -135,29 +135,36 @@ func ReceiveElevatorStatus(rxChan chan ElevatorStatus) {
 	}
 }
 
+// **Broadcast cab assignment over the network**
+func SendCabAssignment(targetElevator string, floor int) {
+	fmt.Printf("Sending cab assignment to %s for floor %d\n", targetElevator, floor)
+
+	cabCall := AssignmentMessage{
+		TargetID: targetElevator,
+		Floor:    floor,
+		Button:   elevio.BT_Cab, 
+	}
+
+	txAssignmentChan <- cabCall
+}
+
 // **Broadcasts assigned hall calls over the network**
 // Send hall assignment to a specific elevator
 func SendHallAssignment(targetElevator string, floor int, button elevio.ButtonType) {
 	fmt.Printf("Sending hall assignment to %s for floor %d\n", targetElevator, floor)
 
-	hallCall := HallAssignmentMessage{
+	hallCall := AssignmentMessage{
 		TargetID: targetElevator,
 		Floor:    floor,
 		Button:   button,
 	}
 
-	txHallCallChan <- hallCall
+	txAssignmentChan <- hallCall
 }
 
 // **SendRawHallCall sends a raw hall call event over the network**
 // hall calls received by slaves need to be broadcasted to master for assignment
-// Send to master only (with retry)
 func SendRawHallCall(masterID string, hallCall elevio.ButtonEvent) {
-    if masterID == "" {
-        // No master known – fall back to broadcasting to all
-        txRawHallCallChan <- RawHallCallMessage{TargetID: "", Floor: hallCall.Floor, Button: hallCall.Button}
-        return
-    }
     if config.LocalID == masterID {
         // This node is the master – no need to forward the call
         return

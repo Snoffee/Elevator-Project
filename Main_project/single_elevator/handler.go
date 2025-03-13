@@ -122,13 +122,12 @@ func handleAssignedRawHallCall(rawCall network.RawHallCallMessage, hallCallChan 
 
 // **Receive Hall Assignments from Network**
 // If the best elevator was another elevator on the network the order gets sent here
-func ReceiveHallAssignments(assignedNetworkHallCallChan chan network.HallAssignmentMessage) {
+func ReceiveHallAssignments(assignedNetworkHallCallChan chan network.AssignmentMessage) {
 	for {
 		msg := <-assignedNetworkHallCallChan
         // Only process the message if it is intended for this elevator.
         if msg.TargetID == config.LocalID {
             fmt.Printf("Received hall assignment for me from network: Floor %d, Button %v\n\n", msg.Floor, msg.Button)
-            // Convert to a ButtonEvent and handle it.
             event := elevio.ButtonEvent{Floor: msg.Floor, Button: msg.Button}
             handleAssignedHallCall(event)
         } else {

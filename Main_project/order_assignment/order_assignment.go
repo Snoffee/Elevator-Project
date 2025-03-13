@@ -19,7 +19,7 @@ import (
 
 // **Run Order Assignment as a Goroutine**
 func RunOrderAssignment(
-	elevatorStateChan chan map[string]network.ElevatorStatus, masterChan chan string, lostPeerChan chan string, hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent) {
+	elevatorStateChan chan map[string]network.ElevatorStatus, masterChan chan string, lostPeerChan chan string, newPeerChan chan string, hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent) {
 
 	go func() {
 		var latestMasterID string
@@ -35,9 +35,14 @@ func RunOrderAssignment(
 				fmt.Printf("Updated Master ID: %s\n\n", latestMasterID)
 
 			case lostElevator := <-lostPeerChan:
-				fmt.Printf("Lost elevator detected: %s. Reassigning orders...\n\n", lostElevator)
+				fmt.Printf("Lost elevator detected: %s. Reassigning hall orders...\n\n", lostElevator)
 				if latestMasterID == config.LocalID && latestElevatorStates != nil {
 					ReassignLostHallOrders(lostElevator, latestElevatorStates, assignedHallCallChan)
+				}
+			case newElevator := <-newPeerChan:
+				fmt.Printf("New elevator detected: %s. Restoring cab calls...\n\n", newElevator)
+				if latestMasterID == config.LocalID && latestElevatorStates != nil {
+					ReassignCabCalls(newElevator, latestElevatorStates)
 				}
 			case hallCall := <-hallCallChan: // Receives a hall call from single_elevator
 				if latestMasterID == config.LocalID {
@@ -73,9 +78,6 @@ func ReassignLostHallOrders(lostElevator string, elevatorStates map[string]netwo
 		return
 	}
 
-	// Print current statemap (for debug of reassigning cab calls)
-	fmt.Printf("Current statemap: %v\n\n", elevatorStates)
-
 	// Reassign all hall orders assigned to the lost elevator
 	for floor := 0; floor < config.NumFloors; floor++ {
 		for button := 0; button < config.NumButtons; button++ {
@@ -103,6 +105,27 @@ func ReassignLostHallOrders(lostElevator string, elevatorStates map[string]netwo
 					fmt.Printf("No available elevator for reassignment!\n\n")
 				}
 			}
+		}
+	}
+}
+
+// **Send cab calls back to a recovering elevator**
+func ReassignCabCalls(recoveredElevator string, elevatorStates map[string]network.ElevatorStatus) {
+	fmt.Printf("Restoring cab calls for %s...\n", recoveredElevator)
+
+	// Ensure the elevator exists before proceeding
+	if state, exists := elevatorStates[recoveredElevator]; !exists {
+		fmt.Printf("Recovered elevator %s not found in state map!\n", recoveredElevator)
+		return
+	} else {
+		fmt.Printf("Restoring state: %v\n", state.Queue)
+	}
+
+	// Reassign all cab orders back to the recovered elevator
+	for floor := 0; floor < config.NumFloors; floor++ {
+		if elevatorStates[recoveredElevator].Queue[floor][elevio.BT_Cab] {
+			fmt.Printf("Reassigning cab call at floor %d to %s\n", floor, recoveredElevator)
+			network.SendCabAssignment(recoveredElevator, floor)
 		}
 	}
 }

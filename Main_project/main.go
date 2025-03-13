@@ -32,6 +32,7 @@ func main() {
 	elevatorStateChan := make(chan map[string]network.ElevatorStatus) // Elevator state updates
 	masterChan := make(chan string, 1)             // Master election results
 	lostPeerChan := make(chan string)				// Lost peers
+	newPeerChan := make(chan string)				// New peers
 	hallCallChan := make(chan elevio.ButtonEvent, 20)  // Send hall calls to order_assignment
 	assignedHallCallChan := make(chan elevio.ButtonEvent, 20) // Receive assigned hall calls
 
@@ -39,7 +40,7 @@ func main() {
 	go single_elevator.RunSingleElevator(hallCallChan, assignedHallCallChan)
 
 	// Start Peer Monitoring
-	go peer_monitor.RunMonitorPeers(peerUpdates, lostPeerChan)
+	go peer_monitor.RunMonitorPeers(peerUpdates, lostPeerChan, newPeerChan)
 	
 	// Start Master Election 
 	go master_election.RunMasterElection(elevatorStateChan, masterChan)
@@ -48,7 +49,7 @@ func main() {
 	go network.RunNetwork(elevatorStateChan, peerUpdates)
 	
 	// Start Order Assignment
-	go order_assignment.RunOrderAssignment(elevatorStateChan, masterChan, lostPeerChan, hallCallChan, assignedHallCallChan)
+	go order_assignment.RunOrderAssignment(elevatorStateChan, masterChan, lostPeerChan, newPeerChan, hallCallChan, assignedHallCallChan)
 
 	select{}
 

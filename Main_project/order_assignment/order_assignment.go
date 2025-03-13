@@ -42,7 +42,7 @@ func RunOrderAssignment(
 			case hallCall := <-hallCallChan: // Receives a hall call from single_elevator
 				if latestMasterID == config.LocalID {
 					// Check if the hall call is already assigned
-					bestElevator := AssignHallOrder(hallCall.Floor, hallCall.Button, latestElevatorStates)						
+					bestElevator := AssignHallOrder(hallCall.Floor, hallCall.Button, latestElevatorStates, "") // Passing "" on excludeElevator when normally calling AssignHallOrder					
 					
 					if bestElevator == config.LocalID {
 						// If this elevator was chosen, send it back to `single_elevator`
@@ -79,7 +79,7 @@ func ReassignLostOrders(lostElevator string, elevatorStates map[string]network.E
 			if state, exists := elevatorStates[lostElevator]; exists && state.Queue[floor][button] {
 				fmt.Printf("Reassigning order at floor %d to a new elevator\n", floor)
 
-				bestElevator := AssignHallOrder(floor, elevio.ButtonType(button), elevatorStates) // Reassign order
+				bestElevator := AssignHallOrder(floor, elevio.ButtonType(button), elevatorStates, lostElevator) // Reassign order
 
 				if bestElevator != "" {
 					fmt.Printf("Order at floor %d successfully reassigned to %s\n\n", floor, bestElevator)
@@ -96,10 +96,13 @@ func ReassignLostOrders(lostElevator string, elevatorStates map[string]network.E
 			}
 		}
 	}
+	// Now safe to remove the lost elevator from state
+	delete(elevatorStates, lostElevator)
+	fmt.Printf("Removed lost elevator %s from state map after reassignment\n\n", lostElevator)
 }
 
 // **Assign hall order to the closest available elevator**
-func AssignHallOrder(floor int, button elevio.ButtonType, elevatorStates map[string]network.ElevatorStatus) string {
+func AssignHallOrder(floor int, button elevio.ButtonType, elevatorStates map[string]network.ElevatorStatus, excludeElevator string) string {
 	fmt.Printf("Available elevators: %v\n\n", elevatorStates)
 
 	bestElevator := ""
@@ -107,6 +110,10 @@ func AssignHallOrder(floor int, button elevio.ButtonType, elevatorStates map[str
 
 	// Find the best elevator based on distance
 	for id, state := range elevatorStates {
+		if id == excludeElevator { 
+			continue // Skip the lost elevator
+		}
+
 		distance := abs(state.Floor - floor)
 		fmt.Printf("Checking elevator %s at floor %d (distance: %d)\n", id, state.Floor, distance)
 

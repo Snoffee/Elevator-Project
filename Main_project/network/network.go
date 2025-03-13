@@ -105,12 +105,6 @@ func UpdateElevatorStates(newPeers []string, lostPeers []string) {
 			}
 		}
 	}
-
-	// Remove lost elevators from the state map
-	for _, lostPeer := range lostPeers {
-		fmt.Printf("Removing lost elevator %s from state map\n", lostPeer)
-		delete(elevatorStates, lostPeer)
-	}
 }
 
 // **Broadcast this elevator's state to the network**

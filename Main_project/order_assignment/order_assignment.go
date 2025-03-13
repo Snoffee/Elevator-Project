@@ -50,10 +50,12 @@ func RunOrderAssignment(
 						assignedHallCallChan <- hallCall
 					} else {
 						// If another elevator was chosen, send assignment over network
+						fmt.Printf("Sending assignment to elevator: %s\n\n", bestElevator)
 						network.SendHallAssignment(bestElevator, hallCall.Floor, hallCall.Button)
 					}
 				} else {
 					// If the slave gets the hall order, send order on network (Forwarding hall call to master)
+					fmt.Printf("Forwarding hall call to master: %s\n\n", latestMasterID)
 					network.SendRawHallCall(latestMasterID, hallCall)
 				}
 			}
@@ -98,8 +100,7 @@ func ReassignLostOrders(lostElevator string, elevatorStates map[string]network.E
 
 // **Assign hall order to the closest available elevator**
 func AssignHallOrder(floor int, button elevio.ButtonType, elevatorStates map[string]network.ElevatorStatus) string {
-	fmt.Println("Available elevators:", elevatorStates)
-	fmt.Println()
+	fmt.Printf("Available elevators: %v\n\n", elevatorStates)
 
 	bestElevator := ""
 	bestDistance := config.NumFloors + 1

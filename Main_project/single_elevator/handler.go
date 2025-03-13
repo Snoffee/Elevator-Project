@@ -29,14 +29,17 @@ func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.Butto
 	if event.Button == elevio.BT_Cab{
 		elevator.Queue[event.Floor][event.Button] = true
 		elevio.SetButtonLamp(event.Button, event.Floor, true)
-		HandleStateTransition()
+		
+		// If the elevator is already at the requested floor, process it immediately
+		if elevator.Floor == event.Floor {
+			fmt.Println("Cab call at current floor, processing immediately...")
+			ProcessFloorArrival(elevator.Floor) // Reuse existing floor arrival logic
+		} else {
+			HandleStateTransition() // Otherwise, continue normally
+		}
 	} else {
 		// Hall calls are sent to 'order_assignment'
-		// Check if this hall call is already active
-        if !elevator.Queue[event.Floor][event.Button] {
-            elevator.Queue[event.Floor][event.Button] = true  // Mark as active
-            hallCallChan <- event
-		}
+		hallCallChan <- event
 	}
 }
 
@@ -91,7 +94,16 @@ func handleAssignedHallCall(order elevio.ButtonEvent) {
 	fmt.Printf(" Received assigned hall call: Floor %d, Button %d\n\n", order.Floor, order.Button)
 	elevator.Queue[order.Floor][order.Button] = true
 	elevio.SetButtonLamp(order.Button, order.Floor, true)
-	HandleStateTransition()
+
+	// If the elevator is already at the assigned floor, immediately process it
+    if elevator.Floor == order.Floor {
+        fmt.Println("Already at assigned floor, processing immediately...")
+        ProcessFloorArrival(elevator.Floor)
+    } else {
+        // Proceed normally if the elevator is not already at the floor
+        network.BroadcastElevatorStatus(GetElevatorState())
+        HandleStateTransition()
+    }
 }
 
 // **Handles an assigned raw hall call from the network**
@@ -119,7 +131,14 @@ func ReceiveHallAssignments(assignedNetworkHallCallChan chan network.HallAssignm
             // Convert to a ButtonEvent and handle it.
             event := elevio.ButtonEvent{Floor: msg.Floor, Button: msg.Button}
             handleAssignedHallCall(event)
-        } 
+        } else {
+            // If this elevator previously had the request, remove it
+            if elevator.Queue[msg.Floor][msg.Button] {
+                fmt.Printf("Removing hall call at Floor %d from local queue, since assigned elsewhere\n", msg.Floor)
+                elevator.Queue[msg.Floor][msg.Button] = false
+                elevio.SetButtonLamp(msg.Button, msg.Floor, false)
+            }
+        }
 	}
 }
 

@@ -37,7 +37,7 @@ func RunOrderAssignment(
 			case lostElevator := <-lostPeerChan:
 				fmt.Printf("Lost elevator detected: %s. Reassigning orders...\n\n", lostElevator)
 				if latestMasterID == config.LocalID && latestElevatorStates != nil {
-					ReassignLostOrders(lostElevator, latestElevatorStates, assignedHallCallChan)
+					ReassignLostHallOrders(lostElevator, latestElevatorStates, assignedHallCallChan)
 				}
 			case hallCall := <-hallCallChan: // Receives a hall call from single_elevator
 				if latestMasterID == config.LocalID {
@@ -63,8 +63,8 @@ func RunOrderAssignment(
 	}()
 }
 
-// **Reassign orders if an elevator disconnects**
-func ReassignLostOrders(lostElevator string, elevatorStates map[string]network.ElevatorStatus, assignedHallCallChan chan elevio.ButtonEvent) {
+// **Reassign hall orders if an elevator disconnects**
+func ReassignLostHallOrders(lostElevator string, elevatorStates map[string]network.ElevatorStatus, assignedHallCallChan chan elevio.ButtonEvent) {
 	fmt.Printf("Reassigning hall calls from elevator %s...\n", lostElevator)
 
 	// Ensure elevator exists before proceeding
@@ -73,9 +73,18 @@ func ReassignLostOrders(lostElevator string, elevatorStates map[string]network.E
 		return
 	}
 
+	// Print current statemap (for debug of reassigning cab calls)
+	fmt.Printf("Current statemap: %v\n\n", elevatorStates)
+
 	// Reassign all hall orders assigned to the lost elevator
 	for floor := 0; floor < config.NumFloors; floor++ {
 		for button := 0; button < config.NumButtons; button++ {
+
+			// Only reassign hall calls (skip cab calls)
+			if button == int(elevio.BT_Cab) {
+				continue
+			}
+
 			if state, exists := elevatorStates[lostElevator]; exists && state.Queue[floor][button] {
 				fmt.Printf("Reassigning order at floor %d to a new elevator\n", floor)
 
@@ -96,9 +105,6 @@ func ReassignLostOrders(lostElevator string, elevatorStates map[string]network.E
 			}
 		}
 	}
-	// Now safe to remove the lost elevator from state
-	delete(elevatorStates, lostElevator)
-	fmt.Printf("Removed lost elevator %s from state map after reassignment\n\n", lostElevator)
 }
 
 // **Assign hall order to the closest available elevator**

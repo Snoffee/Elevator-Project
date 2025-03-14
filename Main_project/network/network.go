@@ -23,7 +23,7 @@ import (
 const (
 	broadcastPort = 30000 // Port for broadcasting elevator states
 	peerPort      = 30001 // Port for receiving elevator state updates
-	hallCallPort  = 30002 // Port for broadcasting assigned hall calls
+	assignmentPort  = 30002 // Port for broadcasting assigned hall calls
 	rawHallCallPort = 30003 // Port for raw hall calls (hall calls received by slaves, that needs to be forwarded to the master before assigning them)
 )
 
@@ -50,10 +50,11 @@ type RawHallCallMessage struct {
 
 var (
 	elevatorStates    	 = make(map[string]ElevatorStatus) // Global map to track all known elevators
+	backupElevatorStates = make(map[string]ElevatorStatus)
 	stateMutex			 sync.Mutex
 	txElevatorStatusChan = make(chan ElevatorStatus, 10) // Global transmitter channel
 	rxElevatorStatusChan = make(chan ElevatorStatus, 10) // Global receiver channel
-	txAssignmentChan  	 = make(chan AssignmentMessage, 10) // Global channel for hall assignments
+	txAssignmentChan  	 = make(chan AssignmentMessage, 10) // Global channel for assignments
 	txRawHallCallChan	 = make(chan RawHallCallMessage, 10) // Raw hall call events
 )
 
@@ -82,8 +83,8 @@ func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates ch
 	// Start elevator status receiver
 	go ReceiveElevatorStatus(rxElevatorStatusChan)
 
-	// Start broadcasting hall calls
-	go bcast.Transmitter(hallCallPort, txAssignmentChan)
+	// Start broadcasting assignments
+	go bcast.Transmitter(assignmentPort, txAssignmentChan)
 
 	// Start broadcasting raw hall calls
 	go bcast.Transmitter(rawHallCallPort, txRawHallCallChan)
@@ -95,6 +96,14 @@ func UpdateElevatorStates(newPeers []string, lostPeers []string) {
 	stateMutex.Lock()
 	defer stateMutex.Unlock()
 
+	// Ensure the backup keeps all previously lost elevators
+	for _, lostPeer := range lostPeers {
+		if _, exists := elevatorStates[lostPeer]; exists {
+			fmt.Printf("Backing up lost elevator: %s\n\n", lostPeer)
+			backupElevatorStates[lostPeer] = elevatorStates[lostPeer]
+		}
+	}
+
 	// Add new elevators to the state map
 	for _, newPeer := range newPeers {
 		if _, exists := elevatorStates[newPeer]; !exists {
@@ -105,6 +114,16 @@ func UpdateElevatorStates(newPeers []string, lostPeers []string) {
 			}
 		}
 	}
+	// Remove lost elevators from the state map
+	for _, lostPeer := range lostPeers {
+		fmt.Printf("Removing lost elevator %s from state map\n\n", lostPeer)
+		delete(elevatorStates, lostPeer)
+	}
+}
+
+// **Retrieve backup state for cab call reassignment**
+func GetBackupState() map[string]ElevatorStatus {
+	return backupElevatorStates
 }
 
 // **Broadcast this elevator's state to the network**
@@ -123,11 +142,11 @@ func BroadcastElevatorStatus(e config.Elevator) {
 }
 
 // **Receives and updates elevator status messages from other elevators**
-func ReceiveElevatorStatus(rxChan chan ElevatorStatus) {
-	go bcast.Receiver(broadcastPort, rxChan)
+func ReceiveElevatorStatus(rxElevatorStatusChan chan ElevatorStatus) {
+	go bcast.Receiver(broadcastPort, rxElevatorStatusChan)
 
 	for {
-		hallAssignment := <-rxChan
+		hallAssignment := <-rxElevatorStatusChan
 
 		stateMutex.Lock()
 		elevatorStates[hallAssignment.ID] = hallAssignment

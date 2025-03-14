@@ -42,7 +42,7 @@ func RunOrderAssignment(
 			case newElevator := <-newPeerChan:
 				if latestMasterID == config.LocalID && latestElevatorStates != nil {
 					fmt.Printf("New elevator detected: %s. Restoring cab calls...\n\n", newElevator)
-					ReassignCabCalls(newElevator, latestElevatorStates)
+					ReassignCabCalls(newElevator)
 				}
 			case hallCall := <-hallCallChan: 
 				if latestMasterID == config.LocalID {
@@ -98,8 +98,9 @@ func ReassignLostHallOrders(lostElevator string, elevatorStates map[string]netwo
 }
 
 // **Send cab calls back to a recovering elevator**
-func ReassignCabCalls(recoveredElevator string, elevatorStates map[string]network.ElevatorStatus) {
-	state, exists := elevatorStates[recoveredElevator]; 
+func ReassignCabCalls(recoveredElevator string) {
+	backupElevatorStates := network.GetBackupState()
+	state, exists := backupElevatorStates[recoveredElevator]; 
 	if !exists {
 		fmt.Printf("Recovered elevator %s not found in state map!\n", recoveredElevator)
 		return
@@ -109,7 +110,7 @@ func ReassignCabCalls(recoveredElevator string, elevatorStates map[string]networ
 
 	for floor := 0; floor < config.NumFloors; floor++ {
 		if state.Queue[floor][elevio.BT_Cab] {
-			fmt.Printf("Reassigning cab call at floor %d to %s\n", floor, recoveredElevator)
+			fmt.Printf("Reassigning cab call at floor %d to %s\n\n", floor, recoveredElevator)
 			network.SendAssignment(recoveredElevator, floor, elevio.BT_Cab)
 		}
 	}

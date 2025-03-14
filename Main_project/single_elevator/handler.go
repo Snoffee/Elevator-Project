@@ -33,12 +33,11 @@ func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.Butto
 		// If the elevator is already at the requested floor, process it immediately
 		if elevator.Floor == event.Floor {
 			fmt.Println("Cab call at current floor, processing immediately...")
-			ProcessFloorArrival(elevator.Floor) // Reuse existing floor arrival logic
+			ProcessFloorArrival(elevator.Floor) 
 		} else {
-			HandleStateTransition() // Otherwise, continue normally
+			HandleStateTransition() 
 		}
 	} else {
-		// Hall calls are sent to 'order_assignment'
 		hallCallChan <- event
 	}
 }
@@ -51,18 +50,14 @@ func ProcessFloorArrival(floor int) {
 	fmt.Printf("Elevator position updated: Now at Floor %d\n\n", elevator.Floor)
 
 	// If an order exists at this floor, open doors
-	if elevator.Queue[floor] != [config.NumButtons]bool{false} {
+	if hasOrdersAtFloor(floor) {
 		fmt.Println("Transitioning from Moving to DoorOpen...")
 		elevator.State = config.DoorOpen
 		elevio.SetMotorDirection(elevio.MD_Stop)
 		elevio.SetDoorOpenLamp(true)
 
-		// Turn off button lights after servicing
-		elevator.Queue[floor] = [config.NumButtons]bool{false}
-		for btn := 0; btn < config.NumButtons; btn++ {
-			elevio.SetButtonLamp(elevio.ButtonType(btn), floor, false)
-		}
-		network.BroadcastElevatorStatus(elevator) // Ensure master sees the update
+		clearFloorOrders(floor)
+		network.BroadcastElevatorStatus(elevator) 
 	}
 	HandleStateTransition()
 }
@@ -82,6 +77,7 @@ func ProcessObstruction(obstructed bool) {
 			time.Sleep(config.DoorOpenTime * time.Second)
 			if !elevator.Obstructed {
 				elevator.State = config.Idle
+				elevio.SetDoorOpenLamp(false)
 				HandleStateTransition()
 			}
 		}()
@@ -100,7 +96,6 @@ func handleAssignedHallCall(order elevio.ButtonEvent) {
         fmt.Println("Already at assigned floor, processing immediately...")
         ProcessFloorArrival(elevator.Floor)
     } else {
-        // Proceed normally if the elevator is not already at the floor
         network.BroadcastElevatorStatus(GetElevatorState())
         HandleStateTransition()
     }
@@ -125,17 +120,14 @@ func handleAssignedRawHallCall(rawCall network.RawHallCallMessage, hallCallChan 
 func ReceiveHallAssignments(assignedNetworkHallCallChan chan network.AssignmentMessage) {
 	for {
 		msg := <-assignedNetworkHallCallChan
-        // Only process the message if it is intended for this elevator.
         if msg.TargetID == config.LocalID {
             fmt.Printf("Received hall assignment for me from network: Floor %d, Button %v\n\n", msg.Floor, msg.Button)
-            event := elevio.ButtonEvent{Floor: msg.Floor, Button: msg.Button}
-            handleAssignedHallCall(event)
+            handleAssignedHallCall(elevio.ButtonEvent{Floor: msg.Floor, Button: msg.Button})
         } else {
             // If this elevator previously had the request, remove it
             if elevator.Queue[msg.Floor][msg.Button] {
                 fmt.Printf("Removing hall call at Floor %d from local queue, since assigned elsewhere\n", msg.Floor)
-                elevator.Queue[msg.Floor][msg.Button] = false
-                elevio.SetButtonLamp(msg.Button, msg.Floor, false)
+                clearFloorOrders(msg.Floor)
             }
         }
 	}

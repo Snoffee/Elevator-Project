@@ -59,3 +59,16 @@ func HasOrdersBelow(e config.Elevator) bool {
 	}
 	return false
 }
+
+// **Checks if there are orders at the floor**
+func hasOrdersAtFloor(floor int) bool {
+	return elevator.Queue[floor] != [config.NumButtons]bool{false}
+}
+
+// **Clears orders at a given floor**
+func clearFloorOrders(floor int) {
+	elevator.Queue[floor] = [config.NumButtons]bool{false}
+	for btn := 0; btn < config.NumButtons; btn++ {
+		elevio.SetButtonLamp(elevio.ButtonType(btn), floor, false)
+	}
+}

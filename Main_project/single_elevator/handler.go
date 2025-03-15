@@ -29,9 +29,9 @@ func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.Butto
 	if event.Button == elevio.BT_Cab{
 		elevator.Queue[event.Floor][event.Button] = true
 		elevio.SetButtonLamp(event.Button, event.Floor, true)
-		
+		floorSensorValue := elevio.GetFloor()
 		// If the elevator is already at the requested floor, process it immediately
-		if elevator.Floor == event.Floor {
+		if (elevator.Floor == event.Floor && floorSensorValue != -1){
 			fmt.Println("Cab call at current floor, processing immediately...")
 			ProcessFloorArrival(elevator.Floor, orderStatusChan) 
 		} else {
@@ -156,9 +156,9 @@ func handleAssignedHallCall(order elevio.ButtonEvent, orderStatusChan chan netwo
 	msg := network.OrderStatusMessage{ButtonEvent: order, SenderID: config.LocalID, Status: network.Unfinished}
 	orderStatusChan <- msg
 	network.SendOrderStatus(msg)
-
+	floorSensorValue := elevio.GetFloor()
 	// If the elevator is already at the assigned floor, immediately process it
-    if elevator.Floor == order.Floor {
+    if elevator.Floor == order.Floor && floorSensorValue != -1{
         fmt.Println("Already at assigned floor, processing immediately...")
         ProcessFloorArrival(elevator.Floor, orderStatusChan)
     } else {

@@ -229,7 +229,7 @@ func SendRawHallCall(masterID string, hallCall elevio.ButtonEvent) {
 
     // Start a brief timeout to retry if master doesn’t respond quickly
     go func(call RawHallCallMessage) {
-        time.Sleep(100 * time.Millisecond)          // small delay before retry
+        time.Sleep(1 * time.Second)          // small delay before retry
         txRawHallCallChan <- call                   // resend the hall call to master
     }(msg)
 }

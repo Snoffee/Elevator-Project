@@ -19,7 +19,7 @@ import (
 
 // **Run Order Assignment as a Goroutine**
 func RunOrderAssignment(
-	elevatorStateChan chan map[string]network.ElevatorStatus, masterChan chan string, lostPeerChan chan string, newPeerChan chan string, hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent) {
+	elevatorStateChan chan map[string]network.ElevatorStatus, masterChan chan string, lostPeerChan chan string, newPeerChan chan string, hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, confirmedOrderChan chan network.ConfirmedOrderMessage) {
 
 	go func() {
 		var latestMasterID string
@@ -59,8 +59,14 @@ func RunOrderAssignment(
 					network.SendRawHallCall(latestMasterID, hallCall)
 					fmt.Printf("Forwarded hall call to master: %s\n\n", latestMasterID)
 				}
+			case confirmed := <-confirmedOrderChan:
+				if latestMasterID == config.LocalID {
+					network.SendLightOrder(confirmed.ButtonEvent)
+					elevio.SetButtonLamp(confirmed.ButtonEvent.Button, confirmed.ButtonEvent.Floor, true)
+					fmt.Printf("Attempted to send light order to all elevators\n\n")
 			}
 		}
+	}
 	}()
 }
 

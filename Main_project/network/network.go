@@ -25,6 +25,8 @@ const (
 	peerPort      = 30001 // Port for receiving elevator state updates
 	assignmentPort  = 30002 // Port for broadcasting assigned hall calls
 	rawHallCallPort = 30003 // Port for raw hall calls (hall calls received by slaves, that needs to be forwarded to the master before assigning them)
+	confirmationPort = 30004 // Port for hall call confirmations
+	lightPort = 30005 // Port for light orders (hall call lights)
 )
 
 // **Data structure for elevator status messages**
@@ -48,6 +50,16 @@ type RawHallCallMessage struct {
     Button   elevio.ButtonType
 }
 
+type ConfirmedOrderMessage struct {
+    SenderID   string
+    ButtonEvent elevio.ButtonEvent
+}
+
+type LightOrderMessage struct {
+	TargetID   string
+	ButtonEvent elevio.ButtonEvent
+}
+
 var (
 	elevatorStates    	 = make(map[string]ElevatorStatus) // Global map to track all known elevators
 	backupElevatorStates = make(map[string]ElevatorStatus)
@@ -56,10 +68,13 @@ var (
 	rxElevatorStatusChan = make(chan ElevatorStatus, 10) // Global receiver channel
 	txAssignmentChan  	 = make(chan AssignmentMessage, 10) // Global channel for assignments
 	txRawHallCallChan	 = make(chan RawHallCallMessage, 10) // Raw hall call events
+	txLightChan	 = make(chan LightOrderMessage, 20) // transmit light orders
+	rxOrderConfirmationChan = make(chan ConfirmedOrderMessage, 10) // Receive confirmation of hall calls
+	txOrderConfirmationChan = make(chan ConfirmedOrderMessage, 10) // Transmit confirmation of hall calls
 )
 
 // **Start Network: Continuously Broadcast Elevator States**
-func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates chan peers.PeerUpdate) {
+func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates chan peers.PeerUpdate, confirmOrderChan chan ConfirmedOrderMessage) {
 	// Start peer reciver to get updates from other elevators
 	go peers.Receiver(peerPort, peerUpdates)
 
@@ -77,6 +92,7 @@ func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates ch
 		}
 	}()
 
+
 	// Start broadcasting elevator states
 	go bcast.Transmitter(broadcastPort, txElevatorStatusChan)
 
@@ -88,6 +104,22 @@ func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates ch
 
 	// Start broadcasting raw hall calls
 	go bcast.Transmitter(rawHallCallPort, txRawHallCallChan)
+
+	// Start broadcasting hall call confirmations
+	go bcast.Transmitter(confirmationPort, txOrderConfirmationChan)
+
+	// Start receiving hall call confirmations
+	go bcast.Receiver(confirmationPort, rxOrderConfirmationChan)
+
+	go func() {
+        for {
+            msg := <-rxOrderConfirmationChan
+            confirmOrderChan <- msg
+        }
+    }()
+
+	// Start broadcasting light orders
+	go bcast.Transmitter(lightPort, txLightChan)
 
 }
 
@@ -184,3 +216,24 @@ func SendRawHallCall(masterID string, hallCall elevio.ButtonEvent) {
         txRawHallCallChan <- call                   // resend the hall call to master
     }(msg)
 }
+
+func SendOrderConfirmation(msg ConfirmedOrderMessage) {
+    txOrderConfirmationChan <- msg
+}
+
+func SendLightOrder(buttonLight elevio.ButtonEvent) {
+	stateMutex.Lock()
+    defer stateMutex.Unlock()
+    // Create tagged light order messages
+	for _, elevator := range elevatorStates {
+		if elevator.ID == config.LocalID {
+			continue
+		}
+    	msg := LightOrderMessage{
+        	TargetID: elevator.ID,
+        	ButtonEvent: buttonLight,
+    	}
+    txLightChan <- msg
+	}
+}
+

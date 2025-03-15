@@ -14,12 +14,13 @@ import (
 	"Main_project/elevio"
 	"Main_project/network"
 	"Main_project/network/bcast"
+	"Main_project/config"
 	"fmt"
 	"time"
 )
 
 // **Run Single Elevator Logic**
-func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent) {
+func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, confirmOrderChan chan network.ConfirmedOrderMessage) {
 	// Initialize elevator hardware event channels
 	drv_buttons := make(chan elevio.ButtonEvent)
 	drv_floors := make(chan int)
@@ -40,8 +41,12 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 	rawHallCallChan := make(chan network.RawHallCallMessage, 10)
 	go bcast.Receiver(30003, rawHallCallChan) // rawHallCallPort
 
+	// Start the receiver to listen for light orders
+	lightOrderChan := make(chan network.LightOrderMessage, 10)
+	go bcast.Receiver(30005, lightOrderChan) // lightPort
 
-	go ReceiveHallAssignments(assignedNetworkHallCallChan) // Listen for network hall calls
+
+	go ReceiveHallAssignments(assignedNetworkHallCallChan, confirmOrderChan) // Listen for network hall calls
 
 	// Event Loop
 	for {
@@ -58,12 +63,17 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 		
 		// Hall calls
 		case assignedOrder := <-assignedHallCallChan:
-			handleAssignedHallCall(assignedOrder) // Handle local assigned hall call
+			handleAssignedHallCall(assignedOrder, confirmOrderChan) // Handle local assigned hall call
 		
 		case rawCall := <-rawHallCallChan:
 			handleAssignedRawHallCall(rawCall, hallCallChan) // Handle global assigned hall call
+
+		case lightOrder := <-lightOrderChan:
+			if lightOrder.TargetID == config.LocalID {
+				elevio.SetButtonLamp(lightOrder.ButtonEvent.Button, lightOrder.ButtonEvent.Floor, true)
+			}
 		}
 		network.BroadcastElevatorStatus(GetElevatorState())
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(300 * time.Millisecond)
 	}
 }

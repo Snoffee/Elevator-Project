@@ -86,10 +86,13 @@ func ProcessObstruction(obstructed bool) {
 
 // **Handles an assigned hall call from `order_assignment`**
 // If the best elevator is itself, the order gets sent here
-func handleAssignedHallCall(order elevio.ButtonEvent) {
+func handleAssignedHallCall(order elevio.ButtonEvent, confirmOrderChan chan network.ConfirmedOrderMessage){
 	fmt.Printf(" Received assigned hall call: Floor %d, Button %d\n\n", order.Floor, order.Button)
 	elevator.Queue[order.Floor][order.Button] = true
 	elevio.SetButtonLamp(order.Button, order.Floor, true)
+	msg := network.ConfirmedOrderMessage{ButtonEvent: order, SenderID: config.LocalID}
+	confirmOrderChan <- msg
+	network.SendOrderConfirmation(msg)
 
 	// If the elevator is already at the assigned floor, immediately process it
     if elevator.Floor == order.Floor {
@@ -117,12 +120,12 @@ func handleAssignedRawHallCall(rawCall network.RawHallCallMessage, hallCallChan 
 
 // **Receive Hall Assignments from Network**
 // If the best elevator was another elevator on the network the order gets sent here
-func ReceiveHallAssignments(assignedNetworkHallCallChan chan network.AssignmentMessage) {
+func ReceiveHallAssignments(assignedNetworkHallCallChan chan network.AssignmentMessage, confirmOrderChan chan network.ConfirmedOrderMessage) {
 	for {
 		msg := <-assignedNetworkHallCallChan
         if msg.TargetID == config.LocalID {
             fmt.Printf("Received hall assignment for me from network: Floor %d, Button %v\n\n", msg.Floor, msg.Button)
-            handleAssignedHallCall(elevio.ButtonEvent{Floor: msg.Floor, Button: msg.Button})
+            handleAssignedHallCall(elevio.ButtonEvent{Floor: msg.Floor, Button: msg.Button}, confirmOrderChan)
         } else {
             // If this elevator previously had the request, remove it
             if elevator.Queue[msg.Floor][msg.Button] {
@@ -132,5 +135,6 @@ func ReceiveHallAssignments(assignedNetworkHallCallChan chan network.AssignmentM
         }
 	}
 }
+
 
 

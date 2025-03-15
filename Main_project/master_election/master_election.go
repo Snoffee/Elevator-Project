@@ -23,13 +23,13 @@ var (
 func RunMasterElection(elevatorStateChan chan map[string]network.ElevatorStatus, masterChan chan string) {
 	go func() {
 		for elevatorStates := range elevatorStateChan {
-			electMaster(elevatorStates, masterChan)
+			ElectMaster(elevatorStates, masterChan)
 		}
 	}()
 }
 
 // **Elect Master: Assign the lowest ID as master**
-func electMaster(elevatorStates map[string]network.ElevatorStatus, masterChan chan string) {
+func ElectMaster(elevatorStates map[string]network.ElevatorStatus, masterChan chan string) {
 	stateMutex.Lock()
 	defer stateMutex.Unlock()
 

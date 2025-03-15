@@ -1,7 +1,7 @@
-// In: 	
+// In:
 //		elevatorStateChan (from network.go) → Assigns orders dynamically.
 //		masterChan (from master_election.go) → Ensures only the master assigns orders.
-//		lostPeerChan (from peer_monitor.go) → Reassigns orders if an elevator disconnects.	
+//		lostPeerChan (from peer_monitor.go) → Reassigns orders if an elevator disconnects.
 //		hallCallChan (from single_elevator.go) → Receives hall calls from individual elevators.
 
 // Out:
@@ -12,8 +12,9 @@ package order_assignment
 
 import (
 	"Main_project/config"
-	"Main_project/network"
 	"Main_project/elevio"
+	"Main_project/master_election"
+	"Main_project/network"
 	"fmt"
 )
 
@@ -35,6 +36,12 @@ func RunOrderAssignment(
 				fmt.Printf("Updated Master ID: %s\n\n", latestMasterID)
 
 			case lostElevator := <-lostPeerChan:
+				if lostElevator == latestMasterID {
+					fmt.Printf("Master elevator %s disconnected! Reassigning hall orders...\n\n", lostElevator)
+					master_election.ElectMaster(latestElevatorStates, masterChan)
+					newMasterID := <-masterChan
+					latestMasterID = newMasterID
+				}
 				if latestMasterID == config.LocalID && latestElevatorStates != nil {
 					fmt.Printf("Lost elevator detected: %s. Reassigning hall orders...\n\n", lostElevator)
 					ReassignLostHallOrders(lostElevator, latestElevatorStates, assignedHallCallChan)

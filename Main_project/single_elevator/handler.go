@@ -22,7 +22,7 @@ import (
 )
 
 // **Handles button press events**
-func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.ButtonEvent) {
+func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage) {
 	fmt.Printf("Button pressed: %+v\n\n", event)
 	
 	// Cab calls are handled locally
@@ -33,7 +33,7 @@ func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.Butto
 		// If the elevator is already at the requested floor, process it immediately
 		if elevator.Floor == event.Floor {
 			fmt.Println("Cab call at current floor, processing immediately...")
-			ProcessFloorArrival(elevator.Floor) 
+			ProcessFloorArrival(elevator.Floor, orderStatusChan) 
 		} else {
 			HandleStateTransition() 
 		}
@@ -43,7 +43,7 @@ func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.Butto
 }
 
 // **Handles floor sensor events**
-func ProcessFloorArrival(floor int) {
+func ProcessFloorArrival(floor int, orderStatusChan chan network.OrderStatusMessage) {
 	fmt.Printf("Floor sensor triggered: %+v\n", floor)
 	elevator.Floor = floor
 	elevio.SetFloorIndicator(floor)
@@ -55,8 +55,10 @@ func ProcessFloorArrival(floor int) {
 		elevator.State = config.DoorOpen
 		elevio.SetMotorDirection(elevio.MD_Stop)
 		elevio.SetDoorOpenLamp(true)
-
 		clearFloorOrders(floor)
+		msg := network.OrderStatusMessage{ButtonEvent: elevio.ButtonEvent{Floor: floor, Button: elevio.BT_HallUp}, SenderID: config.LocalID, Status: network.Finished}
+		orderStatusChan <- msg
+		network.SendOrderStatus(msg)
 		network.BroadcastElevatorStatus(elevator) 
 	}
 	HandleStateTransition()
@@ -86,18 +88,18 @@ func ProcessObstruction(obstructed bool) {
 
 // **Handles an assigned hall call from `order_assignment`**
 // If the best elevator is itself, the order gets sent here
-func handleAssignedHallCall(order elevio.ButtonEvent, confirmOrderChan chan network.ConfirmedOrderMessage){
+func handleAssignedHallCall(order elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage){
 	fmt.Printf(" Received assigned hall call: Floor %d, Button %d\n\n", order.Floor, order.Button)
 	elevator.Queue[order.Floor][order.Button] = true
 	elevio.SetButtonLamp(order.Button, order.Floor, true)
-	msg := network.ConfirmedOrderMessage{ButtonEvent: order, SenderID: config.LocalID}
-	confirmOrderChan <- msg
-	network.SendOrderConfirmation(msg)
+	msg := network.OrderStatusMessage{ButtonEvent: order, SenderID: config.LocalID, Status: network.Unfinished}
+	orderStatusChan <- msg
+	network.SendOrderStatus(msg)
 
 	// If the elevator is already at the assigned floor, immediately process it
     if elevator.Floor == order.Floor {
         fmt.Println("Already at assigned floor, processing immediately...")
-        ProcessFloorArrival(elevator.Floor)
+        ProcessFloorArrival(elevator.Floor, orderStatusChan)
     } else {
         network.BroadcastElevatorStatus(GetElevatorState())
         HandleStateTransition()
@@ -120,12 +122,12 @@ func handleAssignedRawHallCall(rawCall network.RawHallCallMessage, hallCallChan 
 
 // **Receive Hall Assignments from Network**
 // If the best elevator was another elevator on the network the order gets sent here
-func ReceiveHallAssignments(assignedNetworkHallCallChan chan network.AssignmentMessage, confirmOrderChan chan network.ConfirmedOrderMessage) {
+func ReceiveHallAssignments(assignedNetworkHallCallChan chan network.AssignmentMessage, orderStatusChan chan network.OrderStatusMessage) {
 	for {
 		msg := <-assignedNetworkHallCallChan
         if msg.TargetID == config.LocalID {
             fmt.Printf("Received hall assignment for me from network: Floor %d, Button %v\n\n", msg.Floor, msg.Button)
-            handleAssignedHallCall(elevio.ButtonEvent{Floor: msg.Floor, Button: msg.Button}, confirmOrderChan)
+            handleAssignedHallCall(elevio.ButtonEvent{Floor: msg.Floor, Button: msg.Button}, orderStatusChan)
         } else {
             // If this elevator previously had the request, remove it
             if elevator.Queue[msg.Floor][msg.Button] {

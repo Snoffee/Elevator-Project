@@ -20,7 +20,7 @@ import (
 )
 
 // **Run Single Elevator Logic**
-func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, confirmOrderChan chan network.ConfirmedOrderMessage) {
+func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage) {
 	// Initialize elevator hardware event channels
 	drv_buttons := make(chan elevio.ButtonEvent)
 	drv_floors := make(chan int)
@@ -46,31 +46,35 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 	go bcast.Receiver(30005, lightOrderChan) // lightPort
 
 
-	go ReceiveHallAssignments(assignedNetworkHallCallChan, confirmOrderChan) // Listen for network hall calls
+	go ReceiveHallAssignments(assignedNetworkHallCallChan, orderStatusChan) // Listen for network hall calls
 
 	// Event Loop
 	for {
 		select {
 		// Hardware
 		case buttonEvent := <-drv_buttons:
-			ProcessButtonPress(buttonEvent, hallCallChan) // Handle button press event
+			ProcessButtonPress(buttonEvent, hallCallChan, orderStatusChan) // Handle button press event
 		
 		case floorEvent := <-drv_floors:
-			ProcessFloorArrival(floorEvent) // Handle floor sensor event
+			ProcessFloorArrival(floorEvent, orderStatusChan) // Handle floor sensor event
 
 		case obstructionEvent := <-drv_obstr:
 			ProcessObstruction(obstructionEvent) // Handle obstruction event
 		
 		// Hall calls
 		case assignedOrder := <-assignedHallCallChan:
-			handleAssignedHallCall(assignedOrder, confirmOrderChan) // Handle local assigned hall call
+			handleAssignedHallCall(assignedOrder, orderStatusChan) // Handle local assigned hall call
 		
 		case rawCall := <-rawHallCallChan:
 			handleAssignedRawHallCall(rawCall, hallCallChan) // Handle global assigned hall call
 
 		case lightOrder := <-lightOrderChan:
 			if lightOrder.TargetID == config.LocalID {
-				elevio.SetButtonLamp(lightOrder.ButtonEvent.Button, lightOrder.ButtonEvent.Floor, true)
+				if lightOrder.Light == network.Off {
+					elevio.SetButtonLamp(lightOrder.ButtonEvent.Button, lightOrder.ButtonEvent.Floor, false)
+				} else {
+					elevio.SetButtonLamp(lightOrder.ButtonEvent.Button, lightOrder.ButtonEvent.Floor, true)
+				}
 			}
 		}
 		network.BroadcastElevatorStatus(GetElevatorState())

@@ -19,7 +19,7 @@ import (
 
 // **Run Order Assignment as a Goroutine**
 func RunOrderAssignment(
-	elevatorStateChan chan map[string]network.ElevatorStatus, masterChan chan string, lostPeerChan chan string, newPeerChan chan string, hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, confirmedOrderChan chan network.ConfirmedOrderMessage) {
+	elevatorStateChan chan map[string]network.ElevatorStatus, masterChan chan string, lostPeerChan chan string, newPeerChan chan string, hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage) {
 
 	go func() {
 		var latestMasterID string
@@ -59,12 +59,18 @@ func RunOrderAssignment(
 					network.SendRawHallCall(latestMasterID, hallCall)
 					fmt.Printf("Forwarded hall call to master: %s\n\n", latestMasterID)
 				}
-			case confirmed := <-confirmedOrderChan:
+			case status := <-orderStatusChan:
 				if latestMasterID == config.LocalID {
-					network.SendLightOrder(confirmed.ButtonEvent)
-					elevio.SetButtonLamp(confirmed.ButtonEvent.Button, confirmed.ButtonEvent.Floor, true)
-					fmt.Printf("Attempted to send light order to all elevators\n\n")
-			}
+					if status.Status == network.Unfinished {
+						network.SendLightOrder(status.ButtonEvent, network.On)
+						elevio.SetButtonLamp(status.ButtonEvent.Button, status.ButtonEvent.Floor, true)
+						fmt.Printf("Turned on order hall light for all elevators\n\n")
+					} else {
+						network.SendLightOrder(status.ButtonEvent, network.Off)
+						elevio.SetButtonLamp(status.ButtonEvent.Button, status.ButtonEvent.Floor, false)
+						fmt.Printf("Turned off order hall light for all elevators\n\n")
+					}
+				}
 		}
 	}
 	}()

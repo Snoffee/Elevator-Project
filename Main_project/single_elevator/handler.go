@@ -127,10 +127,14 @@ func ProcessFloorArrival(floor int, orderStatusChan chan network.OrderStatusMess
 
 // **Handles obstruction events**
 func ProcessObstruction(obstructed bool) {
-	fmt.Printf("Obstruction detected: %+v\n", obstructed)
 	elevator.Obstructed = obstructed
 
-	if obstructed {
+	if elevator.State != config.DoorOpen {
+		return
+	}
+
+	if obstructed{
+		fmt.Printf("Obstruction detected: %+v\n", obstructed)
 		elevio.SetMotorDirection(elevio.MD_Stop)
 		elevio.SetDoorOpenLamp(true)
 		elevator.State = config.DoorOpen
@@ -153,9 +157,11 @@ func handleAssignedHallCall(order elevio.ButtonEvent, orderStatusChan chan netwo
 	fmt.Printf(" Received assigned hall call: Floor %d, Button %d\n\n", order.Floor, order.Button)
 	elevator.Queue[order.Floor][order.Button] = true
 	elevio.SetButtonLamp(order.Button, order.Floor, true)
-	msg := network.OrderStatusMessage{ButtonEvent: order, SenderID: config.LocalID, Status: network.Unfinished}
-	orderStatusChan <- msg
-	network.SendOrderStatus(msg)
+	if order.Button != elevio.BT_Cab {
+		msg := network.OrderStatusMessage{ButtonEvent: order, SenderID: config.LocalID, Status: network.Unfinished}
+		orderStatusChan <- msg
+		network.SendOrderStatus(msg)
+	}
 	floorSensorValue := elevio.GetFloor()
 	// If the elevator is already at the assigned floor, immediately process it
     if elevator.Floor == order.Floor && floorSensorValue != -1{

@@ -32,6 +32,12 @@ func InitElevator() {
 		Obstructed: false,
 		Queue:      [config.NumFloors][config.NumButtons]bool{}, 
 	}
+	for f := 0; f < config.NumFloors; f++ {
+		for b := 0; b < config.NumButtons; b++ {
+			button := elevio.ButtonType(b)
+			elevio.SetButtonLamp(button, f, false)
+		}
+	}
 	//Correctly sets current floor
 	floor := elevio.GetFloor()
 	fmt.Printf("Read initial floor as %v\n", floor)
@@ -48,7 +54,6 @@ func InitElevator() {
 		elevator.Floor = elevio.GetFloor()
 	}
 	fmt.Printf("I'm starting at floor %v\n", elevator.Floor)
-
 }
 
 // **Handles state transitions**

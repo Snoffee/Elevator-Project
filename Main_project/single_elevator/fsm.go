@@ -13,6 +13,7 @@ import (
 	"Main_project/elevio"
 	"time"
 	"fmt"
+	"os"
 )
 
 var elevator config.Elevator
@@ -69,6 +70,13 @@ func HandleStateTransition() {
 			elevator.State = config.Moving
 			elevator.Direction = nextDir
 			elevio.SetMotorDirection(nextDir)
+
+			// Track destination and start timer
+			elevator.Destination = getNextDestination(elevator, nextDir)
+			elevator.MoveStartTime = time.Now()
+
+			// Start timeout
+			go startTimeout(elevator)
 		} else {
 			fmt.Println("No pending orders, staying in Idle.")
 		}
@@ -91,6 +99,26 @@ func HandleStateTransition() {
 		}()
 	}
 	fmt.Println()
+}
+
+// **Handle power loss scenario**
+func HandlePowerLoss(elevator *config.Elevator) {
+	fmt.Printf("Power loss detected. Failed to reach floor %d from floor %d\n", elevator.Destination, elevator.Floor)
+    fmt.Println("Forcefully shutting down the system due to power loss.")
+    os.Exit(1)
+}
+
+// **Start timeout to check if the elevator reaches the destination within a time limit**
+func startTimeout(elevator config.Elevator) {
+	timeLimit := time.Duration(config.DestinationTimeLimit) * time.Second
+	time.Sleep(timeLimit)
+	if elevator.State == config.Moving && time.Since(elevator.MoveStartTime) > timeLimit {
+		if elevio.GetFloor() != elevator.Destination{
+			HandlePowerLoss(&elevator)
+		} else {
+			fmt.Println("Destination reached within time limit.")
+		}
+	}
 }
 
 

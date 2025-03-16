@@ -189,19 +189,16 @@ func handleAssignedRawHallCall(rawCall network.RawHallCallMessage, hallCallChan 
 
 // **Receive Hall Assignments from Network**
 // If the best elevator was another elevator on the network the order gets sent here
-func ReceiveHallAssignments(assignedNetworkHallCallChan chan network.AssignmentMessage, orderStatusChan chan network.OrderStatusMessage) {
-	for {
-		msg := <-assignedNetworkHallCallChan
-        if msg.TargetID == config.LocalID {
-            fmt.Printf("Received hall assignment for me from network: Floor %d, Button %v\n\n", msg.Floor, msg.Button)
-            handleAssignedHallCall(elevio.ButtonEvent{Floor: msg.Floor, Button: msg.Button}, orderStatusChan)
-        } else {
-            // If this elevator previously had the request, remove it
-            if elevator.Queue[msg.Floor][msg.Button] {
-                fmt.Printf("Removing hall call at Floor %d from local queue, since assigned elsewhere\n", msg.Floor)
-                clearFloorOrders(msg.Floor)
-            }
-        }
+func handleAssignedNetworkHallCall(msg network.AssignmentMessage, orderStatusChan chan network.OrderStatusMessage) {
+	if msg.TargetID == config.LocalID {
+		fmt.Printf("Received hall assignment for me from network: Floor %d, Button %v\n\n", msg.Floor, msg.Button)
+		handleAssignedHallCall(elevio.ButtonEvent{Floor: msg.Floor, Button: msg.Button}, orderStatusChan)
+	} else {
+		// If this elevator previously had the request, remove it
+		if elevator.Queue[msg.Floor][msg.Button] {
+			fmt.Printf("Removing hall call at Floor %d from local queue, since assigned elsewhere\n", msg.Floor)
+			clearFloorOrders(msg.Floor)
+		}
 	}
 }
 

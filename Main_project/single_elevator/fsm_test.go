@@ -44,3 +44,74 @@ func TestHandlePowerLoss(t *testing.T) {
 		t.Errorf("Expected elevator state to be Idle after power loss, but got %v", elevator.State)
 	}
 }
+
+// Mock function to replace forceShutdown during testing
+var shutdownCalled bool
+
+func mockForceShutdown(reason string) {
+	shutdownCalled = true
+}
+
+func TestSafeguardInvalidFloor(t *testing.T) {
+	port := os.Getenv("ELEVATOR_PORT")
+	if port == "" {
+    	port = "15657" // Default
+	}
+	elevio.Init("localhost:" + port, config.NumFloors)
+
+	InitElevator()
+
+	// Initialize the elevator state
+	elevator = config.Elevator{
+		Floor:         0,
+		Direction:     elevio.MD_Stop,
+		State:         config.Idle,
+		Obstructed:    false,
+		Queue:         [config.NumFloors][config.NumButtons]bool{},
+		MoveStartTime: time.Now(),
+		Destination:   1,
+	}
+
+	// Override the forceShutdown function with mock
+	forceShutdown = mockForceShutdown
+
+	// Test invalid floor below 0
+	elevator.Floor = -1
+	shutdownCalled = false
+	HandleStateTransition()
+	if !shutdownCalled {
+		t.Errorf("Expected forceShutdown to be called for floor %d, but it was not", elevator.Floor)
+	}
+
+	// Test invalid floor above NumFloors
+	elevator.Floor = config.NumFloors
+	shutdownCalled = false
+	HandleStateTransition()
+	if !shutdownCalled {
+		t.Errorf("Expected forceShutdown to be called for floor %d, but it was not", elevator.Floor)
+	}
+}
+
+func TestValidFloorTransition(t *testing.T) {
+	// Initialize the elevator state
+	elevator = config.Elevator{
+		Floor:         0,
+		Direction:     elevio.MD_Stop,
+		State:         config.Idle,
+		Obstructed:    false,
+		Queue:         [config.NumFloors][config.NumButtons]bool{},
+		MoveStartTime: time.Now(),
+		Destination:   1,
+	}
+
+	// Ensure no shutdown for valid floor
+	forceShutdown = mockForceShutdown
+	shutdownCalled = false
+
+	// Move to a valid floor and check transition
+	elevator.Floor = 1
+	HandleStateTransition()
+	if shutdownCalled {
+		t.Errorf("Did not expect forceShutdown to be called for floor %d", elevator.Floor)
+	}
+}

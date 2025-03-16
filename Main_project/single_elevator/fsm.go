@@ -61,6 +61,12 @@ func InitElevator() {
 func HandleStateTransition() {
 	fmt.Printf("Handling state transition from %v\n", elevator.State)
 
+	// Safeguard check
+	if elevator.Floor < 0 || elevator.Floor >= config.NumFloors - 1 {
+		forceShutdown(fmt.Sprintf("invalid floor %d", elevator.Floor))
+		return
+	}
+
 	switch elevator.State {
 	case config.Idle:
 		nextDir := ChooseDirection(elevator)
@@ -101,24 +107,24 @@ func HandleStateTransition() {
 	fmt.Println()
 }
 
-// **Handle power loss scenario**
-func HandlePowerLoss(elevator *config.Elevator) {
-	fmt.Printf("Power loss detected. Failed to reach floor %d from floor %d\n", elevator.Destination, elevator.Floor)
-    fmt.Println("Forcefully shutting down the system due to power loss.")
-    os.Exit(1)
-}
-
 // **Start timeout to check if the elevator reaches the destination within a time limit**
 func startTimeout(elevator config.Elevator) {
 	timeLimit := time.Duration(config.DestinationTimeLimit) * time.Second
 	time.Sleep(timeLimit)
 	if elevator.State == config.Moving && time.Since(elevator.MoveStartTime) > timeLimit {
 		if elevio.GetFloor() != elevator.Destination{
-			HandlePowerLoss(&elevator)
+			fmt.Printf("Power loss detected. Failed to reach floor %d from floor %d\n", elevator.Destination, elevator.Floor)
+			forceShutdown("power loss")
 		} else {
 			fmt.Println("Destination reached within time limit.")
 		}
 	}
+}
+
+// Variable to hold the forceShutdown function, allowing it to be mocked during testing
+var forceShutdown = func(reason string) {
+	fmt.Printf("Forcefully shutting down the system due to: %s\n", reason)
+	os.Exit(1)
 }
 
 

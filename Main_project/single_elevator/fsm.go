@@ -23,6 +23,11 @@ func GetElevatorState() config.Elevator {
 	return elevator
 }
 
+// **Set the entire elevator state (for testing purposes)**
+func SetElevatorState(e config.Elevator) {
+	elevator = e
+}
+
 // **Initialize Elevator**
 func InitElevator() {
 

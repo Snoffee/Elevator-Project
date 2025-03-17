@@ -28,6 +28,9 @@ func TestHandlePowerLoss(t *testing.T) {
 		Destination:   1,
 	}
 
+	// Override the forceShutdown function with mock
+	forceShutdown = mockForceShutdown
+
 	// Simulate starting to move
 	elevator.State = config.Moving
 	elevator.Direction = elevio.MD_Up
@@ -40,8 +43,8 @@ func TestHandlePowerLoss(t *testing.T) {
 	time.Sleep(config.DestinationTimeLimit*time.Second + 1*time.Second)
 
 	// Check if the system has exited
-	if elevator.State != config.Idle {
-		t.Errorf("Expected elevator state to be Idle after power loss, but got %v", elevator.State)
+	if !shutdownCalled {
+		t.Errorf("Expected forceShutdown to be called, but it was not")
 	}
 }
 

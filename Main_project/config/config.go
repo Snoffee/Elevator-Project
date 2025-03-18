@@ -30,7 +30,7 @@ const (
 	NumFloors  = 4
 	NumButtons = 3
 	DoorOpenTime = 3 // Seconds
-	DestinationTimeLimit = 6 // Seconds
+	DestinationTimeLimit = 9 // Seconds
 )
 
 var LocalID string

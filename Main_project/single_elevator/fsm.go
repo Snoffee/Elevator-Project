@@ -17,6 +17,7 @@ import (
 )
 
 var elevator config.Elevator
+var stopTimeout chan bool
 
 // **Get the entire elevator state**
 func GetElevatorState() config.Elevator {
@@ -67,9 +68,11 @@ func HandleStateTransition() {
 	fmt.Printf("Handling state transition from %v\n", elevator.State)
 
 	// Safeguard check
-	if elevator.Floor < 0 || elevator.Floor >= config.NumFloors - 1 {
-		forceShutdown(fmt.Sprintf("invalid floor %d", elevator.Floor))
-		return
+	if elevator.Floor < 0 || elevator.Floor >= config.NumFloors {
+		if elevator.Floor != -1 {
+			forceShutdown(fmt.Sprintf("invalid floor %d", elevator.Floor))
+			return
+		}
 	}
 
 	switch elevator.State {
@@ -86,7 +89,10 @@ func HandleStateTransition() {
 			elevator.Destination = getNextDestination(elevator, nextDir)
 			elevator.MoveStartTime = time.Now()
 
-			// Start timeout
+			// Cancel previous timeout and start a new one
+			if stopTimeout != nil {
+				stopTimeout <- true
+			}
 			go startTimeout(elevator)
 		} else {
 			fmt.Println("No pending orders, staying in Idle.")
@@ -113,16 +119,17 @@ func HandleStateTransition() {
 }
 
 // **Start timeout to check if the elevator reaches the destination within a time limit**
-func startTimeout(elevator config.Elevator) {
+func startTimeout(e config.Elevator) {
+	stopTimeout = make(chan bool, 1) // Reset timeout channel
 	timeLimit := time.Duration(config.DestinationTimeLimit) * time.Second
-	time.Sleep(timeLimit)
-	if elevator.State == config.Moving && time.Since(elevator.MoveStartTime) > timeLimit {
-		if elevio.GetFloor() != elevator.Destination{
-			fmt.Printf("Power loss detected. Failed to reach floor %d from floor %d\n", elevator.Destination, elevator.Floor)
+	select {
+	case <-time.After(timeLimit):
+		if e.State == config.Moving && elevio.GetFloor() != e.Destination {
+			fmt.Printf("Power loss detected. Failed to reach floor %d from floor %d\n", e.Destination, e.Floor)
 			forceShutdown("power loss")
-		} else {
-			fmt.Println("Destination reached within time limit.")
-		}
+		} 
+	case <-stopTimeout:
+		return // Cancel timeout if a movment starts
 	}
 }
 

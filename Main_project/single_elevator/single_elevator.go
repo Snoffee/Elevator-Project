@@ -17,11 +17,6 @@ import (
 	"Main_project/config"
 	"fmt"
 	"time"
-	"os"
-	"bytes"
-	"encoding/gob"
-	"net"
-	"log"
 )
 
 // Elevator heartbeat message
@@ -56,7 +51,6 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 	lightOrderChan := make(chan network.LightOrderMessage, 10)
 	go bcast.Receiver(30005, lightOrderChan) // lightPort
 
-	go sendHeartbeat()
 
 	// Event Loop
 	for {
@@ -92,39 +86,5 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 		}
 		network.BroadcastElevatorStatus(GetElevatorState())
 		time.Sleep(300 * time.Millisecond)
-	}
-}
-
-func sendHeartbeat() {
-	elevatorID := os.Getenv("ELEVATOR_ID")
-	if elevatorID == "" {
-		log.Fatalf("ELEVATOR_ID is not set! Exiting...")
-	}
-
-	addr, _ := net.ResolveUDPAddr("udp", "255.255.255.255:30010") // UDP Broadcast
-
-	conn, err := net.DialUDP("udp", nil, addr)
-	if err != nil {
-		log.Fatalf("Failed to connect to UDP: %v", err)
-	}
-	defer conn.Close()
-
-	for {
-		heartbeat := Heartbeat{ID: elevatorID, Timestamp: time.Now()}
-
-		var buffer bytes.Buffer
-		encoder := gob.NewEncoder(&buffer)
-		err := encoder.Encode(heartbeat)
-		if err != nil {
-			log.Printf("Failed to encode heartbeat: %v", err)
-			continue
-		}
-
-		_, err = conn.Write(buffer.Bytes())
-		if err != nil {
-			log.Printf("Failed to send heartbeat: %v", err)
-		}
-
-		time.Sleep(500 * time.Millisecond) // Send heartbeat every 0.5 seconds
 	}
 }

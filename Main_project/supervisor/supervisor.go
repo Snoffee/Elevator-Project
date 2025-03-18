@@ -1,136 +1,66 @@
 package main
 
 import (
-	"bytes"
-	"encoding/gob"
+	"Main_project/Network/peers"
+	"fmt"
 	"log"
-	"net"
 	"os"
 	"os/exec"
-	"sync"
+	"runtime"
 	"time"
-	"fmt"
 )
-
-// Heartbeat struct
-type Heartbeat struct {
-	ID        string
-	Timestamp time.Time
-}
 
 var (
-	elevatorStatus   = make(map[string]time.Time) // Last received heartbeat
-	restartAttempts  = make(map[string]int)      // Track restart attempts
-	mu               sync.Mutex
-	maxRestarts      = 3                          // Maximum restarts per elevator before cooldown
-	cooldownDuration = 30 * time.Second           // Cooldown time
+    elevatorID   = os.Getenv("ELEVATOR_ID")   
+    elevatorPort = os.Getenv("ELEVATOR_PORT") 
 )
 
-// **Listen for elevator heartbeats**
-func listenForElevators() {
-	udpAddr, _ := net.ResolveUDPAddr("udp", ":30010") // Dedicated port for heartbeats
-
-	conn, err := net.ListenUDP("udp", udpAddr)
-	if err != nil {
-		log.Fatalf("Failed to listen on UDP port: %v", err)
+func main() {
+	if elevatorID == "" || elevatorPort == "" {
+		log.Fatal("ELEVATOR_ID or ELEVATOR_PORT is not set! Exiting...")
 	}
-	defer conn.Close()
 
-	buffer := make([]byte, 1024)
+	log.Printf("Supervisor started for Elevator %s on port %s. Monitoring peer network...", elevatorID, elevatorPort)
 
-	for {
-		n, _, err := conn.ReadFromUDP(buffer)
-		if err != nil {
-			log.Printf("Error reading from UDP: %v", err)
-			continue
-		}
-
-		var receivedData Heartbeat
-		decoder := gob.NewDecoder(bytes.NewReader(buffer[:n]))
-		err = decoder.Decode(&receivedData)
-		if err != nil {
-			log.Printf("Failed to decode heartbeat: %v", err)
-			continue
-		}
-
-		mu.Lock()
-		elevatorStatus[receivedData.ID] = time.Now()
-		restartAttempts[receivedData.ID] = 0 
-		mu.Unlock()
-	}
+	go monitorElevator()
+	select {} 
 }
 
-// **Monitor elevators and restart if offline**
-func monitorElevators() {
+// Monitor a Single Elevator via Peer Network
+func monitorElevator() {
+	peerUpdateChan := make(chan peers.PeerUpdate)
+
+	go peers.Receiver(30001, peerUpdateChan)
+
 	for {
-		time.Sleep(500 * time.Millisecond)
+		update := <-peerUpdateChan
 
-		mu.Lock()
-		for id, lastSeen := range elevatorStatus {
-			if time.Since(lastSeen) > 5*time.Second {
-				log.Printf("🚨 Elevator %s is unresponsive! Restarting...", id)
-
-				if restartAttempts[id] >= maxRestarts {
-					log.Printf("Elevator %s exceeded max restarts. Cooling down...", id)
-					delete(elevatorStatus, id)
-					time.AfterFunc(cooldownDuration, func() {
-						mu.Lock()
-						restartAttempts[id] = 0
-						mu.Unlock()
-					})
-					continue
-				}
-
-				restartAttempts[id]++
-				go restartElevator(id)
-				// Give the elevator time to restart
-				time.Sleep(15 * time.Second)
+		for _, lostElevator := range update.Lost {
+			if lostElevator == elevatorID {
+				log.Printf("Elevator %s disconnected! Restarting...", lostElevator)
+				go restartElevator(lostElevator)
 			}
 		}
-		mu.Unlock()
+		time.Sleep(1 * time.Second) 
 	}
 }
 
-// **Restart an elevator**
 func restartElevator(elevatorID string) {
-	log.Printf("🔄 Restarting Elevator: %s (Attempt %d/%d)...", elevatorID, restartAttempts[elevatorID], maxRestarts)
+	log.Printf("Restarting Elevator: %s on port %s...", elevatorID, elevatorPort)
+	var cmd *exec.Cmd
 
-	elevatorPath := `"C:\Users\synno\OneDrive\Dokumenter\Semester 6\Elevator_Project\Elevator-Project\Main_project"`
-
-	elevatorPorts := map[string]string{
-		"elevator_1": "15657",
-		"elevator_2": "15658",
-		"elevator_3": "15659",
+    if runtime.GOOS == "windows" {
+        psCommand := fmt.Sprintf(`Start-Process powershell -WindowStyle Normal -ArgumentList '-Command', 'cd ..; $env:ELEVATOR_ID=\"%s\"; $env:ELEVATOR_PORT=\"%s\"; go run main.go'`, elevatorID, elevatorPort)
+        cmd = exec.Command("powershell", "-Command", psCommand)
+    } else if runtime.GOOS == "linux" {
+        bashCommand := fmt.Sprintf(`cd .. && ELEVATOR_ID="%s" ELEVATOR_PORT="%s" go run main.go`, elevatorID, elevatorPort)
+        cmd = exec.Command("bash", "-c", bashCommand)
 	}
-
-	elevatorPort, exists := elevatorPorts[elevatorID]
-	if !exists {
-		log.Printf("Unknown elevator ID: %s. Cannot restart.", elevatorID)
-		return
-	}
-
-	// **Corrected PowerShell Command**
-	psCommand := fmt.Sprintf(`Start-Process powershell -WindowStyle Normal -ArgumentList '-NoExit', '-Command', 'Set-Location -LiteralPath \"%s\"; $env:ELEVATOR_ID=\"%s\"; $env:ELEVATOR_PORT=\"%s\"; go run main.go'`,
-		elevatorPath, elevatorID, elevatorPort)
-
-	cmd := exec.Command("powershell", "-Command", psCommand)
-
 	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+    cmd.Stderr = os.Stderr
 
-	err := cmd.Start()
-	if err != nil {
-		log.Printf("Failed to restart Elevator %s: %v", elevatorID, err)
-		return
-	}
+	cmd.Start()
 
-	log.Printf("Successfully restarted Elevator %s on port %s in a **new PowerShell window**", elevatorID, elevatorPort)
-}
-
-// **Main function to start the supervisor**
-func main() {
-	log.Println("Supervisor started. Listening for heartbeats...")
-	go listenForElevators()
-	go monitorElevators()
-	select {} 
+	// Add a longer delay after restarting
+    time.Sleep(30 * time.Second) 
 }

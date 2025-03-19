@@ -174,7 +174,7 @@ func handleAssignedHallCall(order elevio.ButtonEvent, orderStatusChan chan netwo
 }
 
 // **Handles an assigned raw hall call from the network**
-func handleAssignedRawHallCall(rawCall network.RawHallCallMessage, hallCallChan chan elevio.ButtonEvent) {
+func handleAssignedRawHallCall(rawCall network.RawHallCallMessage, hallCallChan chan elevio.ButtonEvent, rawChan chan network.RawHallCallMessage) {
     // Ignore calls not meant for this elevator
     if rawCall.TargetID != "" && rawCall.TargetID != config.LocalID {
         return
@@ -184,6 +184,9 @@ func handleAssignedRawHallCall(rawCall network.RawHallCallMessage, hallCallChan 
     if !elevator.Queue[rawCall.Floor][rawCall.Button] {
         fmt.Printf("Processing raw hall call: Floor %d, Button %d\n", rawCall.Floor, rawCall.Button)
         hallCallChan <- elevio.ButtonEvent{Floor: rawCall.Floor, Button: rawCall.Button}
+		ackMsg:= network.RawHallCallMessage{TargetID: rawCall.SenderID, SenderID: config.LocalID, Floor: rawCall.Floor, Button: rawCall.Button, Ack: true}
+		fmt.Print("Sending ack to slave \n")
+		rawChan <- ackMsg
     }
 }
 

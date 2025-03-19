@@ -24,9 +24,10 @@ const (
 	broadcastPort = 30000 // Port for broadcasting elevator states
 	peerPort      = 30001 // Port for receiving elevator state updates
 	assignmentPort  = 30002 // Port for broadcasting assigned hall calls
-	rawHallCallPort = 30003 // Port for raw hall calls (hall calls received by slaves, that needs to be forwarded to the master before assigning them)
-	statusPort = 30004 // Port for hall call confirmations
-	lightPort = 30005 // Port for light orders (hall call lights)
+	txrawHallCallPort = 30003 // Port for raw hall calls (hall calls received by slaves, that needs to be forwarded to the master before assigning them)
+	rxrawHallCallPort = 30004 // Port for reading the masters ack for hall calls from slaves
+	statusPort = 30005 // Port for hall call confirmations
+	lightPort = 30006 // Port for light orders (hall call lights)
 )
 
 // **Data structure for elevator status messages**
@@ -46,9 +47,18 @@ type AssignmentMessage struct {
 
 type RawHallCallMessage struct {
     TargetID string
+	SenderID string
     Floor    int
     Button   elevio.ButtonType
+	Ack      bool
 }
+
+type AckMessage struct {
+	TargetID string
+	SenderID string
+	key 	string
+}
+
 
 type OrderStatus int
 
@@ -84,7 +94,8 @@ var (
 	txElevatorStatusChan = make(chan ElevatorStatus, 10) // Global transmitter channel
 	rxElevatorStatusChan = make(chan ElevatorStatus, 10) // Global receiver channel
 	txAssignmentChan  	 = make(chan AssignmentMessage, 10) // Global channel for assignments
-	txRawHallCallChan	 = make(chan RawHallCallMessage, 10) // Raw hall call events
+	txRawHallCallChan	 = make(chan RawHallCallMessage, 10) // Slaves send hall call events to master
+	rxRawHallCallChan	 = make(chan RawHallCallMessage, 10) // Slaves reveice hall call acks from master
 	txLightChan	 = make(chan LightOrderMessage, 20) // transmit light orders
 	rxOrderStatusChan = make(chan OrderStatusMessage, 10) // Receive confirmation of hall calls
 	txOrderStatusChan = make(chan OrderStatusMessage, 10) // Transmit confirmation of hall calls
@@ -120,7 +131,9 @@ func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates ch
 	go bcast.Transmitter(assignmentPort, txAssignmentChan)
 
 	// Start broadcasting raw hall calls
-	go bcast.Transmitter(rawHallCallPort, txRawHallCallChan)
+	go bcast.Transmitter(txrawHallCallPort, txRawHallCallChan)
+
+	go bcast.Receiver(rxrawHallCallPort, rxRawHallCallChan)
 
 	// Start broadcasting hall call status
 	go bcast.Transmitter(statusPort, txOrderStatusChan)
@@ -128,6 +141,7 @@ func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates ch
 	// Start receiving hall call status
 	go bcast.Receiver(statusPort, rxOrderStatusChan)
 
+	// Bridge between channels
 	go func() {
         for {
             msg := <-rxOrderStatusChan
@@ -224,14 +238,26 @@ func SendRawHallCall(masterID string, hallCall elevio.ButtonEvent) {
         return
     }
     // Send hall call directly to the current master
-    msg := RawHallCallMessage{TargetID: masterID, Floor: hallCall.Floor, Button: hallCall.Button}
-    txRawHallCallChan <- msg
-
-    // Start a brief timeout to retry if master doesn’t respond quickly
-    go func(call RawHallCallMessage) {
-        time.Sleep(1 * time.Second)          // small delay before retry
-        txRawHallCallChan <- call                   // resend the hall call to master
-    }(msg)
+	//fmt.Printf("First attempt at forwarding hall call to master: %s\n", masterID)
+    msg := RawHallCallMessage{TargetID: masterID, SenderID: config.LocalID, Floor: hallCall.Floor, Button: hallCall.Button, Ack: false}
+    //txRawHallCallChan <- msg
+	timeout := time.After(10 * time.Second)
+	for{
+		select{
+			case potentialAck := <- rxRawHallCallChan:
+				if potentialAck.Ack == true && potentialAck.TargetID == config.LocalID && potentialAck.Floor == hallCall.Floor && potentialAck.Button == hallCall.Button {
+					fmt.Println("Received ack from master")
+					return
+				}
+			case <-timeout:
+				fmt.Println("Timeout reached, stopping attempts")
+				return
+			default:
+				fmt.Println("First attemt/No ack received, trying again")
+				txRawHallCallChan <- msg
+				time.Sleep(100 * time.Millisecond)
+			}
+	}
 }
 
 func SendOrderStatus(msg OrderStatusMessage) {

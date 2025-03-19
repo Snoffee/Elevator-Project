@@ -53,7 +53,7 @@ func RunOrderAssignment(
 				}
 			case hallCall := <-hallCallChan: 
 				if latestMasterID == config.LocalID {
-					bestElevator := AssignHallOrder(hallCall.Floor, hallCall.Button, latestElevatorStates, "") // Passing "" on excludeElevator when normally calling AssignHallOrder					
+					bestElevator := AssignHallOrder(hallCall.Floor, hallCall.Button, latestElevatorStates, "") // Passing "" on excludeElevator when normally calling AssignHallOrder		
 					
 					if bestElevator == config.LocalID {
 						assignedHallCallChan <- hallCall

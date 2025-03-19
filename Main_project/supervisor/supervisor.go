@@ -1,7 +1,7 @@
 package main
 
 import (
-	"Main_project/Network/peers"
+	"Main_project/network/peers"
 	"fmt"
 	"log"
 	"os"

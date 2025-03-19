@@ -50,16 +50,17 @@ func InitElevator() {
 	fmt.Printf("Read initial floor as %v\n", floor)
 	switch floor{
 	case -1:
-		for elevio.GetFloor() != 0{
+		for elevio.GetFloor() == -1{
 			elevio.SetMotorDirection(elevio.MD_Down)
 		}
 		elevio.SetMotorDirection(elevio.MD_Stop)
 		fmt.Printf("My motordirection is: %v\n", elevator.Direction)
-		elevator.Floor = 0
+		elevator.Floor = elevio.GetFloor()
 		
 	default:
 		elevator.Floor = elevio.GetFloor()
 	}
+	elevio.SetFloorIndicator(elevator.Floor)
 	fmt.Printf("I'm starting at floor %v\n", elevator.Floor)
 }
 

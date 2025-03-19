@@ -53,12 +53,6 @@ type RawHallCallMessage struct {
 	Ack      bool
 }
 
-type AckMessage struct {
-	TargetID string
-	SenderID string
-	key 	string
-}
-
 
 type OrderStatus int
 
@@ -141,7 +135,7 @@ func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates ch
 	// Start receiving hall call status
 	go bcast.Receiver(statusPort, rxOrderStatusChan)
 
-	// Bridge between channels
+	//Bridge between channels
 	go func() {
         for {
             msg := <-rxOrderStatusChan

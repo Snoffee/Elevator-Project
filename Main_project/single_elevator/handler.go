@@ -161,6 +161,7 @@ func handleAssignedHallCall(order elevio.ButtonEvent, orderStatusChan chan netwo
 		msg := network.OrderStatusMessage{ButtonEvent: order, SenderID: config.LocalID, Status: network.Unfinished}
 		orderStatusChan <- msg
 		network.SendOrderStatus(msg)
+		fmt.Printf("sent message with status:unfinished to network")
 	}
 	floorSensorValue := elevio.GetFloor()
 	// If the elevator is already at the assigned floor, immediately process it

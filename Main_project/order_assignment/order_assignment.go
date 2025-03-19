@@ -69,11 +69,13 @@ func RunOrderAssignment(
 			case status := <-orderStatusChan:
 				if latestMasterID == config.LocalID {
 					if status.Status == network.Unfinished {
+						fmt.Printf("Received unfinished order status from elevator %s\n", status.SenderID)
 						network.SendLightOrder(status.ButtonEvent, network.On)
 						elevio.SetButtonLamp(status.ButtonEvent.Button, status.ButtonEvent.Floor, true)
 						fmt.Printf("Turned on order hall light for all elevators\n\n")
 					} else {
 						network.SendLightOrder(status.ButtonEvent, network.Off)
+						fmt.Printf("Received finished order status from elevator %s\n", status.SenderID)
 						elevio.SetButtonLamp(status.ButtonEvent.Button, status.ButtonEvent.Floor, false)
 						fmt.Printf("Turned off order hall light for all elevators\n\n")
 					}

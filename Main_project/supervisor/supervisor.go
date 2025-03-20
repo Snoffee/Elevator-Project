@@ -80,5 +80,5 @@ func restartElevator(elevatorID string) {
 	cmd.Start()
 
 	// Add a longer delay after restarting
-    time.Sleep(60 * time.Second) 
+    time.Sleep(30 * time.Second) 
 }

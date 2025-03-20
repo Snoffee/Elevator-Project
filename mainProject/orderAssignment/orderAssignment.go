@@ -8,13 +8,13 @@
 //		assignedHallCallChan (to single_elevator.go) → Sends hall call assignments back to the requesting elevator.
 //		SendHallAssignment → BroadcastHallAssignment (to network.go) → Sends hall call assignments to other elevators.
 
-package order_assignment
+package orderAssignment
 
 import (
-	"Main_project/config"
-	"Main_project/elevio"
-	"Main_project/master_election"
-	"Main_project/network"
+	"mainProject/config"
+	"mainProject/elevio"
+	"mainProject/masterElection"
+	"mainProject/network"
 	"fmt"
 )
 
@@ -38,7 +38,7 @@ func RunOrderAssignment(
 			case lostElevator := <-lostPeerChan:
 				if lostElevator == latestMasterID {
 					fmt.Printf("Master elevator %s disconnected! Reassigning hall orders...\n\n", lostElevator)
-					master_election.ElectMaster(latestElevatorStates, masterChan)
+					masterElection.ElectMaster(latestElevatorStates, masterChan)
 					newMasterID := <-masterChan
 					latestMasterID = newMasterID
 				}

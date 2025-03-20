@@ -6,11 +6,11 @@
 //		GetElevatorState() → Returns elevator's current state to other modules.
 //		HandleStateTransition() → Determines the next action for the elevator.
 
-package single_elevator
+package singleElevator
 
 import (
-	"Main_project/config"
-	"Main_project/elevio"
+	"mainProject/config"
+	"mainProject/elevio"
 	"time"
 	"fmt"
 	"os"

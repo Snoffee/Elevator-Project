@@ -1,9 +1,9 @@
-package single_elevator
+package singleElevator
 
 import (
 	"testing"
-	"Main_project/config"
-	"Main_project/elevio"
+	"mainProject/config"
+	"mainProject/elevio"
 	"time"
 	"os"
 )

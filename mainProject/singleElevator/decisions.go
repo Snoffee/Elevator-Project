@@ -5,11 +5,11 @@
 //		ChooseDirection() → Determines the next movement for the elevator.
 //		Helper functions (hasOrdersAbove(), hasOrdersBelow()) → Used in ChooseDirection().
 
-package single_elevator
+package singleElevator
 
 import (
-	"Main_project/config"
-	"Main_project/elevio"
+	"mainProject/config"
+	"mainProject/elevio"
 )
 
 // **Decides next direction**

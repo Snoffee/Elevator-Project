@@ -4,11 +4,11 @@
 // Out:
 //	masterChan (used by network.go & order_assignment.go) → Notifies all modules when a new master is elected.
 
-package master_election
+package masterElection
 
 import (
-	"Main_project/config"
-	"Main_project/network"
+	"mainProject/config"
+	"mainProject/network"
 	"fmt"
 	"sync"
 )

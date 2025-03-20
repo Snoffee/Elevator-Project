@@ -13,10 +13,10 @@
 package network
 
 import (
-	"Main_project/config"
-	"Main_project/network/bcast"
-	"Main_project/network/peers"
-	"Main_project/elevio"
+	"mainProject/config"
+	"mainProject/network/bcast"
+	"mainProject/network/peers"
+	"mainProject/elevio"
 	"fmt"
 	"sync"
 	"time"

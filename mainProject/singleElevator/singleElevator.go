@@ -1,20 +1,20 @@
 // In:
-//		assignedHallCallChan (from `order_assignment`) → Receives assigned hall calls.
+//		assignedHallCallChan (from `orderAssignment`) → Receives assigned hall calls.
 //		drv_buttons (from `elevio`) → Detects button presses.
 //		drv_floors (from `elevio`) → Detects floor arrival events.
 //		drv_obstr (from `elevio`) → Detects obstruction events.
 
 // Out:
-//		hallCallChan → Sends hall call requests to `order_assignment`.
+//		hallCallChan → Sends hall call requests to `orderAssignment`.
 //		network.BroadcastElevatorStatus() → Updates other elevators on status.
 
-package single_elevator
+package singleElevator
 
 import (
-	"Main_project/elevio"
-	"Main_project/network"
-	"Main_project/network/bcast"
-	"Main_project/config"
+	"mainProject/elevio"
+	"mainProject/network"
+	"mainProject/network/bcast"
+	"mainProject/config"
 	"fmt"
 	"time"
 )

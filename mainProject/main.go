@@ -1,14 +1,14 @@
 package main
 
 import (
-	"Main_project/elevio"
-	"Main_project/config"
-	"Main_project/single_elevator"
-	"Main_project/network"
-	"Main_project/network/peers"
-	"Main_project/master_election"
-	"Main_project/peer_monitor"
-	"Main_project/order_assignment"
+	"mainProject/elevio"
+	"mainProject/config"
+	"mainProject/singleElevator"
+	"mainProject/network"
+	"mainProject/network/peers"
+	"mainProject/masterElection"
+	"mainProject/peerMonitor"
+	"mainProject/orderAssignment"
 	"fmt"
 	"os"
 )
@@ -23,7 +23,7 @@ func main() {
 	elevio.Init("localhost:" + port, config.NumFloors)
 
 	// Initialize elevator state
-	single_elevator.InitElevator()
+	singleElevator.InitElevator()
 	// Initialize local ID
 	config.InitConfig()
 	fmt.Printf("This elevator's ID: %s\n", config.LocalID)
@@ -38,19 +38,19 @@ func main() {
 	assignedHallCallChan := make(chan elevio.ButtonEvent, 20) // Receive assigned hall calls
 
 	// Start single_elevator
-	go single_elevator.RunSingleElevator(hallCallChan, assignedHallCallChan, orderStatusChan)
+	go singleElevator.RunSingleElevator(hallCallChan, assignedHallCallChan, orderStatusChan)
 
 	// Start Peer Monitoring
-	go peer_monitor.RunMonitorPeers(peerUpdates, lostPeerChan, newPeerChan)
+	go peerMonitor.RunMonitorPeers(peerUpdates, lostPeerChan, newPeerChan)
 	
 	// Start Master Election 
-	go master_election.RunMasterElection(elevatorStateChan, masterChan)
+	go masterElection.RunMasterElection(elevatorStateChan, masterChan)
 
 	// Start Network
 	go network.RunNetwork(elevatorStateChan, peerUpdates, orderStatusChan)
 	
 	// Start Order Assignment
-	go order_assignment.RunOrderAssignment(elevatorStateChan, masterChan, lostPeerChan, newPeerChan, hallCallChan, assignedHallCallChan, orderStatusChan)
+	go orderAssignment.RunOrderAssignment(elevatorStateChan, masterChan, lostPeerChan, newPeerChan, hallCallChan, assignedHallCallChan, orderStatusChan)
 
 	select{}
 

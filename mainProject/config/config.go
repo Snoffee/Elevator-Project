@@ -1,7 +1,7 @@
 package config
 
 import (
-	"Main_project/elevio"
+	"mainProject/elevio"
 	"os"
 	"fmt"
 	"time"

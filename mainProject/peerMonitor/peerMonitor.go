@@ -5,12 +5,12 @@
 //      network.go (via UpdateElevatorStates()) → Updates global elevator states.
 //      order_assignment.go (via lostPeerChan) → Triggers order reassignment when an elevator disconnects.
 
-package peer_monitor
+package peerMonitor
 
 import (
-	"Main_project/config"
-	"Main_project/network"
-	"Main_project/network/peers"
+	"mainProject/config"
+	"mainProject/network"
+	"mainProject/network/peers"
 	"time"
 	"fmt"
 )

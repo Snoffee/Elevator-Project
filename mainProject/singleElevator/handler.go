@@ -11,12 +11,12 @@
 //		Handles door opening/closing and state transitions.
 
 
-package single_elevator
+package singleElevator
 
 import (
-	"Main_project/config"
-	"Main_project/elevio"
-	"Main_project/network"
+	"mainProject/config"
+	"mainProject/elevio"
+	"mainProject/network"
 	"fmt"
 	"time"
 )

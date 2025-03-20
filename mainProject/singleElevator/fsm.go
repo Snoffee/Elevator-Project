@@ -106,7 +106,7 @@ func HandleStateTransition() {
 // **Start timeout to check if the elevator reaches the destination within a time limit**
 func startTimeout(e config.Elevator) {
 	stopTimeout = make(chan bool, 1) // Reset timeout channel
-	timeLimit := time.Duration(config.DestinationTimeLimit) * time.Second
+	timeLimit := time.Duration(config.NotMovingTimeLimit) * time.Second
 	select {
 	case <-time.After(timeLimit):
 		if e.State == config.Moving && elevio.GetFloor() != e.Destination {

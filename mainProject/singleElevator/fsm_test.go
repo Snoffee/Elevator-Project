@@ -40,7 +40,7 @@ func TestHandlePowerLoss(t *testing.T) {
 	startTimeout(elevator)
 
 	// Wait for the timeout duration plus a buffer to ensure HandlePowerLoss is called
-	time.Sleep(config.DestinationTimeLimit*time.Second + 1*time.Second)
+	time.Sleep(config.NotMovingTimeLimit*time.Second + 1*time.Second)
 
 	// Check if the system has exited
 	if !shutdownCalled {

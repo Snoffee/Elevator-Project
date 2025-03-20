@@ -10,21 +10,21 @@ import (
 )
 
 // **Run Single Elevator Logic**
-func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage) {
+func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage, lostPeerChan chan string, newPeerChan chan string) {
 	// Initialize elevator hardware event channels
-	drv_buttons := make(chan elevio.ButtonEvent)
-	drv_floors := make(chan int)
-	drv_obstr := make(chan bool)
+	buttonPress       := make(chan elevio.ButtonEvent)
+	floorSensor       := make(chan int)
+	obstructionSwitch := make(chan bool)
 
 	// Start polling hardware for events
-	go elevio.PollButtons(drv_buttons)
-	go elevio.PollFloorSensor(drv_floors)
-	go elevio.PollObstructionSwitch(drv_obstr)
+	go elevio.PollButtons(buttonPress)
+	go elevio.PollFloorSensor(floorSensor)
+	go elevio.PollObstructionSwitch(obstructionSwitch)
 
 	fmt.Println("Single Elevator Module Running...")
 
 	// Start the receiver to listen for hall assignments
-	assignedNetworkHallCallChan  := make(chan network.AssignmentMessage, 10) 
+	assignedNetworkHallCallChan := make(chan network.AssignmentMessage, 10) 
 	go bcast.Receiver(30002, assignedNetworkHallCallChan) // hallCallPort
 
 	// Create a channel to receive raw hall calls.
@@ -44,14 +44,14 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 	for {
 		select {
 		// Hardware		
-		case buttonEvent := <-drv_buttons:
+		case buttonEvent := <-buttonPress:
 			ProcessButtonPress(buttonEvent, hallCallChan, orderStatusChan) // Handle button press event
 		
-		case floorEvent := <-drv_floors:
+		case floorEvent := <-floorSensor:
 			ProcessFloorArrival(floorEvent, orderStatusChan) // Handle floor sensor event
 
-		case obstructionEvent := <-drv_obstr:
-			ProcessObstruction(obstructionEvent) // Handle obstruction event
+		case obstructionEvent := <-obstructionSwitch:
+			ProcessObstruction(obstructionEvent, hallCallChan, lostPeerChan, newPeerChan) // Handle obstruction event
 		
 		// Hall calls
 		case assignedOrder := <-assignedHallCallChan:

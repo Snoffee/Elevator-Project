@@ -15,29 +15,29 @@ func main() {
 	singleElevator.InitElevator()
 	config.InitConfig()
 
-	peerUpdates := make(chan peers.PeerUpdate)
-	elevatorStateChan := make(chan map[string]network.ElevatorStatus) // Elevator state updates
-	masterChan := make(chan string, 1)             // Master election results
-	lostPeerChan := make(chan string)				// Lost peers
-	newPeerChan := make(chan string)				// New peers
-	hallCallChan := make(chan elevio.ButtonEvent, 20)  // Send hall calls to order_assignment
-	orderStatusChan := make(chan network.OrderStatusMessage, 20) // Send confirmation of hall calls
+	peerUpdates 		 := make(chan peers.PeerUpdate)
+	elevatorStatusesChan := make(chan map[string]network.ElevatorStatus) 
+	masterElectionChan   := make(chan string, 1)            
+	lostPeerChan 		 := make(chan string)				
+	newPeerChan          := make(chan string)				
+	hallCallChan         := make(chan elevio.ButtonEvent, 20)  // Send hall calls to order_assignment
+	orderStatusChan      := make(chan network.OrderStatusMessage, 20) // Send confirmation of hall calls
 	assignedHallCallChan := make(chan elevio.ButtonEvent, 20) // Receive assigned hall calls
 
 	// Start single_elevator
-	go singleElevator.RunSingleElevator(hallCallChan, assignedHallCallChan, orderStatusChan)
+	go singleElevator.RunSingleElevator(hallCallChan, assignedHallCallChan, orderStatusChan, lostPeerChan, newPeerChan)
 
 	// Start Peer Monitoring
 	go peerMonitor.RunMonitorPeers(peerUpdates, lostPeerChan, newPeerChan)
 	
 	// Start Master Election 
-	go masterElection.RunMasterElection(elevatorStateChan, masterChan)
+	go masterElection.RunMasterElection(elevatorStatusesChan, masterElectionChan)
 
 	// Start Network
-	go network.RunNetwork(elevatorStateChan, peerUpdates, orderStatusChan)
+	go network.RunNetwork(elevatorStatusesChan, peerUpdates, orderStatusChan)
 	
 	// Start Order Assignment
-	go orderAssignment.RunOrderAssignment(elevatorStateChan, masterChan, lostPeerChan, newPeerChan, hallCallChan, assignedHallCallChan, orderStatusChan)
+	go orderAssignment.RunOrderAssignment(elevatorStatusesChan, masterElectionChan, lostPeerChan, newPeerChan, hallCallChan, assignedHallCallChan, orderStatusChan)
 
 	select{}
 

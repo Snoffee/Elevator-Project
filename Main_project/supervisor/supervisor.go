@@ -19,7 +19,7 @@ func main() {
 		log.Fatal("ELEVATOR_ID or ELEVATOR_PORT is not set! Exiting...")
 	}
 
-	log.Printf("Supervisor started for Elevator %s on port %s. Monitoring peer network...", elevatorID, elevatorPort)
+	log.Printf("Supervisor started for Elevator %s on port %s.", elevatorID, elevatorPort)
 
 	go monitorElevator()
 	select {} 
@@ -41,17 +41,26 @@ func isElevatorRunning(elevatorID string) bool {
     var cmd *exec.Cmd
 
     if runtime.GOOS == "windows" {
-        // Use PowerShell to check for the process on Windows
-        psCommand := fmt.Sprintf(`Get-Process | Where-Object { $_.Path -like "*elevator_%s*" }`, elevatorID)
+        psCommand := fmt.Sprintf(`Get-Process | Where-Object { $_.Name -eq "elevator_%s" }`, elevatorID)
         cmd = exec.Command("powershell", "-Command", psCommand)
     } else if runtime.GOOS == "linux" {
-        // Use pgrep to check for the process on Linux
         cmd = exec.Command("pgrep", "-f", fmt.Sprintf("elevator_%s", elevatorID))
     }
 
-    err := cmd.Run()
-    return err == nil // If the command succeeds, the process is running
-	}
+    output, err := cmd.Output()
+    if err != nil {
+        log.Printf("Elevator %s is not running: %v", elevatorID, err)
+        return false
+    }
+
+    log.Printf("Command output: %s", string(output))
+    if len(output) == 0 {
+        log.Printf("Elevator %s is not running (no output from command).", elevatorID)
+        return false
+    }
+
+    log.Printf("Elevator %s is running.", elevatorID)
+    return true
 }
 
 func restartElevator(elevatorID string) {
@@ -59,11 +68,11 @@ func restartElevator(elevatorID string) {
 	var cmd *exec.Cmd
 
     if runtime.GOOS == "windows" {
-        psCommand := fmt.Sprintf(`Start-Process powershell -WindowStyle Normal -ArgumentList '-Command', 'cd ..; $env:ELEVATOR_ID=\"%s\"; $env:ELEVATOR_PORT=\"%s\"; go run main.go'`, elevatorID, elevatorPort)
+        psCommand := fmt.Sprintf(`Start-Process powershell -WindowStyle Normal -ArgumentList '-Command', 'cd ..; $env:ELEVATOR_ID=\"%s\"; $env:ELEVATOR_PORT=\"%s\"; ./elevator_%s.exe'`, elevatorID, elevatorPort, elevatorID)
         cmd = exec.Command("powershell", "-Command", psCommand)
     } else if runtime.GOOS == "linux" {
-        bashCommand := fmt.Sprintf(`cd .. && ELEVATOR_ID="%s" ELEVATOR_PORT="%s" go run main.go`, elevatorID, elevatorPort)
-        cmd = exec.Command("bash", "-c", bashCommand)
+        bashCommand := fmt.Sprintf(`cd .. && ELEVATOR_ID="%s" ELEVATOR_PORT="%s" ./elevator_%s`, elevatorID, elevatorPort, elevatorID)
+        cmd = exec.Command("gnome-terminal", "--", "bash", "-c", bashCommand)
 	}
 	cmd.Stdout = os.Stdout
     cmd.Stderr = os.Stderr
@@ -71,5 +80,5 @@ func restartElevator(elevatorID string) {
 	cmd.Start()
 
 	// Add a longer delay after restarting
-    time.Sleep(30 * time.Second) 
+    time.Sleep(60 * time.Second) 
 }

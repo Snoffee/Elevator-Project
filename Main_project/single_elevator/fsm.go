@@ -68,14 +68,6 @@ func InitElevator() {
 func HandleStateTransition() {
 	fmt.Printf("Handling state transition from %v\n", elevator.State)
 
-	// Safeguard check
-	if elevator.Floor < 0 || elevator.Floor >= config.NumFloors {
-		if elevator.Floor != -1 {
-			forceShutdown(fmt.Sprintf("invalid floor %d", elevator.Floor))
-			return
-		}
-	}
-
 	switch elevator.State {
 	case config.Idle:
 		nextDir := ChooseDirection(elevator)

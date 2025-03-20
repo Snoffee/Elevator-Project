@@ -45,6 +45,7 @@ func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.Butto
 // **Handles floor sensor events**
 func ProcessFloorArrival(floor int, orderStatusChan chan network.OrderStatusMessage) {
 	fmt.Printf("Floor sensor triggered: %+v\n", floor)
+	elevio.SetFloorIndicator(floor)
 
 	if !hasOrdersAtFloor(floor) {
 		return
@@ -53,7 +54,6 @@ func ProcessFloorArrival(floor int, orderStatusChan chan network.OrderStatusMess
 	// Stop immediately if orders at current floor
 	elevio.SetMotorDirection(elevio.MD_Stop)
 	elevator.Floor = floor
-	elevio.SetFloorIndicator(floor)
 	fmt.Printf("Elevator position updated: Now at Floor %d\n\n", elevator.Floor)
 
 	hasUpCall := elevator.Queue[floor][elevio.BT_HallUp]
@@ -155,7 +155,7 @@ func ProcessObstruction(obstructed bool) {
 // If the best elevator is itself, the order gets sent here
 func handleAssignedHallCall(order elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage){
 	fmt.Printf(" Received assigned hall call: Floor %d, Button %d\n\n", order.Floor, order.Button)
-	
+
 	elevator.Queue[order.Floor][order.Button] = true
 	elevio.SetButtonLamp(order.Button, order.Floor, true)
 	if order.Button != elevio.BT_Cab {

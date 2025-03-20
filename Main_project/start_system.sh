@@ -10,12 +10,18 @@ ELEVATOR_ID=${1:-"elevator_1"}   # Default to "elevator_1" if not provided
 ELEVATOR_PORT=${2:-"15657"}      # Default to "15657" if not provided
 
 echo "Starting Simulator for $ELEVATOR_ID on port $ELEVATOR_PORT..."
-gnome-terminal -- bash -c "export SERVER_PORT=$ELEVATOR_PORT; cd ../Simulator; ./SimElevatorServer; exec bash"
+gnome-terminal -- bash -c "export SERVER_PORT=$ELEVATOR_PORT; cd ../Simulator; SimElevatorServer; exec bash"
 
 sleep 5
 
+echo "Building Elevator binary for $ELEVATOR_ID..."
+go build -o "elevator_$ELEVATOR_ID" main.go
+if [ $? -ne 0 ]; then
+    echo "Failed to build elevator binary for $ELEVATOR_ID. Exiting..."
+    exit 1
+fi
 echo "Starting Elevator $ELEVATOR_ID on port $ELEVATOR_PORT..."
-gnome-terminal -- bash -c "export ELEVATOR_ID=$ELEVATOR_ID; export ELEVATOR_PORT=$ELEVATOR_PORT; go run main.go; exec bash"
+gnome-terminal -- bash -c "export ELEVATOR_ID=$ELEVATOR_ID; export ELEVATOR_PORT=$ELEVATOR_PORT; ../elevator_$ELEVATOR_ID; exec bash"
 
 sleep 5
 

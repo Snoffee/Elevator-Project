@@ -13,8 +13,15 @@ Start-Process -FilePath "powershell" -ArgumentList "-NoExit", "-Command", "`$env
 
 Start-Sleep -Seconds 5
 
+Write-Host "Building Elevator binary for $ElevatorID..."
+go build -o "elevator_$ElevatorID.exe" main.go
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Failed to build elevator binary for $ElevatorID. Exiting..." -ForegroundColor Red
+    exit 1
+}
+
 Write-Host "Starting Elevator $ElevatorID on port $ElevatorPort..."
-Start-Process -FilePath "powershell" -ArgumentList "-NoExit", "-Command", "`$env:ELEVATOR_ID='$ElevatorID'; `$env:ELEVATOR_PORT='$ElevatorPort'; go run main.go" -WindowStyle Normal
+Start-Process -FilePath "powershell" -ArgumentList "-NoExit", "-Command", "`$env:ELEVATOR_ID='$ElevatorID'; `$env:ELEVATOR_PORT='$ElevatorPort'; ./elevator_$ElevatorID.exe" -WindowStyle Normal
 
 Start-Sleep -Seconds 5
 

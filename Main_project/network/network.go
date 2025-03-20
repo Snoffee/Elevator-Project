@@ -102,8 +102,6 @@ var (
 	txLightChan	     = make(chan LightOrderMessage, 20) // transmit light orders
 	rxOrderStatusChan    = make(chan OrderStatusMessage, 10) // Receive confirmation of hall calls
 	txOrderStatusChan    = make(chan OrderStatusMessage, 10) // Transmit confirmation of hall calls
-	assignmentSeqNum     int 
-	rawHallCallSeqNum    int 
 )
 
 // -----------------------------------------------------------------------------
@@ -223,19 +221,14 @@ func ReceiveElevatorStatus(rxElevatorStatusChan chan ElevatorStatus) {
 // Assignment and Hall Call Management
 // -----------------------------------------------------------------------------
 // Sends an assignment message to a specific elevator for a hall call.
-func SendAssignment(targetElevator string, floor int, button elevio.ButtonType) {
-	stateMutex.Lock()
-    	assignmentSeqNum++
-   	seqNum := assignmentSeqNum
-   	stateMutex.Unlock()
-	
+func SendAssignment(targetElevator string, floor int, button elevio.ButtonType) {	
 	hallCall := AssignmentMessage{
 		TargetID: targetElevator,
 		Floor:    floor,
 		Button:   button,
 	}
 	
-	fmt.Printf("Sending assignment to %s for floor %d with SeqNum %d\n", targetElevator, floor, seqNum)
+	fmt.Printf("Sending assignment to %s for floor %d\n", targetElevator, floor)
 	txAssignmentChan <- hallCall
 }
 
@@ -247,10 +240,6 @@ func SendRawHallCall(masterID string, hallCall elevio.ButtonEvent) {
     }
     // Send hall call directly to the current master
 	//fmt.Printf("First attempt at forwarding hall call to master: %s\n", masterID)
-    stateMutex.Lock()
-    rawHallCallSeqNum++
-    seqNum := rawHallCallSeqNum
-    stateMutex.Unlock()
     
     msg := RawHallCallMessage{TargetID: masterID, SenderID: config.LocalID, Floor: hallCall.Floor, Button: hallCall.Button, Ack: false}
     //txRawHallCallChan <- msg
@@ -284,6 +273,7 @@ func startReceivingHallCallStatus(orderStatusChan chan OrderStatusMessage) {
         }
     }()
     go bcast.Receiver(statusPort, rxOrderStatusChan)
+}
 
 func SendOrderStatus(msg OrderStatusMessage) {
     txOrderStatusChan <- msg

@@ -17,13 +17,9 @@ import (
 	"Main_project/config"
 	"Main_project/elevio"
 	"Main_project/network"
-	"sync"
 	"fmt"
 	"time"
 )
-var lastAssignmentSeqNum = make(map[string]int) // Tracks the last SeqNum for each elevator
-var lastRawHallCallSeqNum = make(map[string]int) // Tracks the last SeqNum for each master
-var stateMutex sync.Mutex                        // Mutex to protect shared state
 
 // **Handles button press events**
 func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage) {
@@ -157,21 +153,9 @@ func ProcessObstruction(obstructed bool) {
 
 // **Handles an assigned hall call from `order_assignment`**
 // If the best elevator is itself, the order gets sent here
-func handleAssignedHallCall(order elevio.ButtonEvent, seqNum int, orderStatusChan chan network.OrderStatusMessage){
-	stateMutex.Lock()
-    defer stateMutex.Unlock()
-
-    // Check if the message is a duplicate or outdated
-    if lastSeq, exists := lastAssignmentSeqNum[config.LocalID]; exists && seqNum <= lastSeq {
-        fmt.Printf("Ignored duplicate or outdated hall call assignment with SeqNum %d\n", seqNum)
-        return
-    }
-
-    // Update the last processed sequence number
-    lastAssignmentSeqNum[config.LocalID] = seqNum
-
-    // Process the hall call assignment
-    fmt.Printf("Received assigned hall call: Floor %d, Button %d, SeqNum %d\n\n", order.Floor, order.Button, seqNum)
+func handleAssignedHallCall(order elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage){
+	fmt.Printf(" Received assigned hall call: Floor %d, Button %d\n\n", order.Floor, order.Button)
+	
 	elevator.Queue[order.Floor][order.Button] = true
 	elevio.SetButtonLamp(order.Button, order.Floor, true)
 	if order.Button != elevio.BT_Cab {

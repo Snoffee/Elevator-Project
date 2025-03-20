@@ -1,12 +1,14 @@
 // In:
-//		peer_monitor.go (via UpdateElevatorStates()) → Updates the global elevator state map.
-//		master_election.go (via masterChan) → Updates the master ID.
-//		single_elevator.go (via BroadcastElevatorStatus()) → Sends individual elevator status updates.
+//	peer_monitor.go (via UpdateElevatorStates()) → Updates the global elevator state map.
+//	master_election.go (via masterChan) → Updates the master ID.
+//	single_elevator.go (via BroadcastElevatorStatus()) → Sends individual elevator status updates.
+//      bcast.Receiver() → Receives elevator status updates from other elevators.
+//     	bcast.Receiver() → Receives hall call confirmations.
 
 // Out:
-//		elevatorStateChan → (Used by order_assignment.go & master_election.go) Sends the latest global elevator states.
+//	elevatorStateChan → (Used by order_assignment.go & master_election.go) Sends the latest global elevator states.
+//	orderStatusChan → (Used by order_assignment.go) Sends confirmation of hall calls.
 //  	bcast.Transmitter() → Broadcasts elevator states to all nodes via UDP.
-//  	BroadcastHallAssignment() → Sends assigned hall calls over the network to all elevators.
 
 package network
 
@@ -21,36 +23,41 @@ import (
 )
 
 const (
-	broadcastPort = 30000 // Port for broadcasting elevator states
-	peerPort      = 30001 // Port for receiving elevator state updates
-	assignmentPort  = 30002 // Port for broadcasting assigned hall calls
+	broadcastPort     = 30000 // Port for broadcasting elevator states
+	peerPort          = 30001 // Port for receiving elevator state updates
+	assignmentPort    = 30002 // Port for broadcasting assigned hall calls
 	txrawHallCallPort = 30003 // Port for raw hall calls (hall calls received by slaves, that needs to be forwarded to the master before assigning them)
 	rxrawHallCallPort = 30004 // Port for reading the masters ack for hall calls from slaves
-	statusPort = 30005 // Port for hall call confirmations
-	lightPort = 30006 // Port for light orders (hall call lights)
+	statusPort        = 30005 // Port for hall call confirmations
+	lightPort         = 30006 // Port for light orders (hall call lights)
 )
 
-// **Data structure for elevator status messages**
+// -----------------------------------------------------------------------------
+// Data Structures
+// -----------------------------------------------------------------------------
 type ElevatorStatus struct {
 	ID        string
 	Floor     int
 	Direction config.ElevatorState
 	Queue     [config.NumFloors][config.NumButtons]bool
 	Timestamp time.Time
+	SeqNum    int
 }
 
 type AssignmentMessage struct {
 	TargetID string
 	Floor    int
 	Button   elevio.ButtonType
+	SeqNum   int 
 }
 
 type RawHallCallMessage struct {
-    TargetID string
+  	TargetID string
 	SenderID string
-    Floor    int
-    Button   elevio.ButtonType
+    	Floor    int
+    	Button   elevio.ButtonType
 	Ack      bool
+	SeqNum   int 
 }
 
 
@@ -80,41 +87,35 @@ type LightOrderMessage struct {
 	Light      LightStatus
 }
 
-
+// -----------------------------------------------------------------------------
+// Global Variables
+// -----------------------------------------------------------------------------
 var (
-	elevatorStates    	 = make(map[string]ElevatorStatus) // Global map to track all known elevators
+	elevatorStates       = make(map[string]ElevatorStatus) // Global map to track all known elevators
 	backupElevatorStates = make(map[string]ElevatorStatus)
-	stateMutex			 sync.Mutex
+	stateMutex	     sync.Mutex
 	txElevatorStatusChan = make(chan ElevatorStatus, 10) // Global transmitter channel
 	rxElevatorStatusChan = make(chan ElevatorStatus, 10) // Global receiver channel
-	txAssignmentChan  	 = make(chan AssignmentMessage, 10) // Global channel for assignments
-	txRawHallCallChan	 = make(chan RawHallCallMessage, 10) // Slaves send hall call events to master
-	rxRawHallCallChan	 = make(chan RawHallCallMessage, 10) // Slaves reveice hall call acks from master
-	txLightChan	 = make(chan LightOrderMessage, 20) // transmit light orders
-	rxOrderStatusChan = make(chan OrderStatusMessage, 10) // Receive confirmation of hall calls
-	txOrderStatusChan = make(chan OrderStatusMessage, 10) // Transmit confirmation of hall calls
+	txAssignmentChan     = make(chan AssignmentMessage, 10) // Global channel for assignments
+	txRawHallCallChan    = make(chan RawHallCallMessage, 10) // Slaves send hall call events to master
+	rxRawHallCallChan    = make(chan RawHallCallMessage, 10) // Slaves reveice hall call acks from master
+	txLightChan	     = make(chan LightOrderMessage, 20) // transmit light orders
+	rxOrderStatusChan    = make(chan OrderStatusMessage, 10) // Receive confirmation of hall calls
+	txOrderStatusChan    = make(chan OrderStatusMessage, 10) // Transmit confirmation of hall calls
+	assignmentSeqNum     int 
+	rawHallCallSeqNum    int 
 )
 
-// **Start Network: Continuously Broadcast Elevator States**
+// -----------------------------------------------------------------------------
+// Initialization and Network Management
+// -----------------------------------------------------------------------------
 func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates chan peers.PeerUpdate, orderStatusChan chan OrderStatusMessage) {
 	// Start peer reciver to get updates from other elevators
 	go peers.Receiver(peerPort, peerUpdates)
 
 	// Periodically send updated elevator states to other modules
-	go func() {
-		for {
-			stateMutex.Lock()
-			copyMap := make(map[string]ElevatorStatus)
-			for k, v := range elevatorStates {
-				copyMap[k] = v
-			}
-			stateMutex.Unlock()
-			elevatorStateChan <- copyMap // Send latest elevator states to all modules
-			time.Sleep(100 * time.Millisecond) // Prevents excessive updates
-		}
-	}()
-
-
+	startPeriodicStateUpdates(elevatorStateChan)
+	
 	// Start broadcasting elevator states
 	go bcast.Transmitter(broadcastPort, txElevatorStatusChan)
 
@@ -128,40 +129,30 @@ func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates ch
 	go bcast.Transmitter(txrawHallCallPort, txRawHallCallChan)
 
 	go bcast.Receiver(rxrawHallCallPort, rxRawHallCallChan)
-
-	// Start broadcasting hall call status
+	
+	// Hall call status
 	go bcast.Transmitter(statusPort, txOrderStatusChan)
-
-	// Start receiving hall call status
-	go bcast.Receiver(statusPort, rxOrderStatusChan)
-
-	//Bridge between channels
-	go func() {
-        for {
-            msg := <-rxOrderStatusChan
-            orderStatusChan <- msg
-        }
-    }()
-
+	startReceivingHallCallStatus(orderStatusChan)
+	
 	// Start broadcasting light orders
 	go bcast.Transmitter(lightPort, txLightChan)
-
 }
 
-// **Updates the global elevator state when a new peer joins or an elevator disconnects**
+// -----------------------------------------------------------------------------
+// Elevator State Management
+// -----------------------------------------------------------------------------
+// Updates the global elevatorStates map when new elevators join or existing elevators disconnect.
+// Backs up the state of lost elevators for potential reassignment of cab calls.
 func UpdateElevatorStates(newPeers []string, lostPeers []string) {
 	stateMutex.Lock()
 	defer stateMutex.Unlock()
 
-	// Ensure the backup keeps all previously lost elevators
 	for _, lostPeer := range lostPeers {
 		if _, exists := elevatorStates[lostPeer]; exists {
 			fmt.Printf("Backing up lost elevator: %s\n\n", lostPeer)
 			backupElevatorStates[lostPeer] = elevatorStates[lostPeer]
 		}
 	}
-
-	// Add new elevators to the state map
 	for _, newPeer := range newPeers {
 		if _, exists := elevatorStates[newPeer]; !exists {
 			fmt.Printf("Adding new elevator %s to state map\n", newPeer)
@@ -171,19 +162,36 @@ func UpdateElevatorStates(newPeers []string, lostPeers []string) {
 			}
 		}
 	}
-	// Remove lost elevators from the state map
 	for _, lostPeer := range lostPeers {
 		fmt.Printf("Removing lost elevator %s from state map\n\n", lostPeer)
 		delete(elevatorStates, lostPeer)
 	}
 }
 
-// **Retrieve backup state for cab call reassignment**
+// Returns the backup state of lost elevators for cab call reassignment.
 func GetBackupState() map[string]ElevatorStatus {
 	return backupElevatorStates
 }
 
-// **Broadcast this elevator's state to the network**
+// Ensures that all modules periodically receive the latest state of all elevators.
+// Maintaining a consistent view of the system across all nodes, even if no immediate events occur.
+func startPeriodicStateUpdates(elevatorStateChan chan map[string]ElevatorStatus) {
+    go func() {
+        for {
+            stateMutex.Lock()
+            copyMap := make(map[string]ElevatorStatus)
+            for k, v := range elevatorStates {
+                copyMap[k] = v
+            }
+            stateMutex.Unlock()
+            elevatorStateChan <- copyMap 
+            time.Sleep(100 * time.Millisecond) 
+        }
+    }()
+}
+
+// Sends immediate updates when critical events happen (e.g., a floor is reached, a hall call is assigned).
+// Ensures that other modules or elevators are notified of state changes without waiting for the next periodic update.
 func BroadcastElevatorStatus(e config.Elevator) {
 	stateMutex.Lock()
 	status := ElevatorStatus{
@@ -198,7 +206,7 @@ func BroadcastElevatorStatus(e config.Elevator) {
 	txElevatorStatusChan <- status
 }
 
-// **Receives and updates elevator status messages from other elevators**
+// Receives elevator state updates from other elevators and updates the global elevatorStates map.
 func ReceiveElevatorStatus(rxElevatorStatusChan chan ElevatorStatus) {
 	go bcast.Receiver(broadcastPort, rxElevatorStatusChan)
 
@@ -211,21 +219,27 @@ func ReceiveElevatorStatus(rxElevatorStatusChan chan ElevatorStatus) {
 	}
 }
 
-// **Broadcasts assigned assignments over the network**
+// -----------------------------------------------------------------------------
+// Assignment and Hall Call Management
+// -----------------------------------------------------------------------------
+// Sends an assignment message to a specific elevator for a hall call.
 func SendAssignment(targetElevator string, floor int, button elevio.ButtonType) {
-	fmt.Printf("Sending assignment to %s for floor %d\n", targetElevator, floor)
-
+	stateMutex.Lock()
+    	assignmentSeqNum++
+   	seqNum := assignmentSeqNum
+   	stateMutex.Unlock()
+	
 	hallCall := AssignmentMessage{
 		TargetID: targetElevator,
 		Floor:    floor,
 		Button:   button,
 	}
-
+	
+	fmt.Printf("Sending assignment to %s for floor %d with SeqNum %d\n", targetElevator, floor, seqNum)
 	txAssignmentChan <- hallCall
 }
 
-// **SendRawHallCall sends a raw hall call event over the network**
-// hall calls received by slaves need to be broadcasted to master for assignment
+// Sends a raw hall call event to the master elevator for assignment.
 func SendRawHallCall(masterID string, hallCall elevio.ButtonEvent) {
     if config.LocalID == masterID {
         // This node is the master – no need to forward the call
@@ -233,6 +247,11 @@ func SendRawHallCall(masterID string, hallCall elevio.ButtonEvent) {
     }
     // Send hall call directly to the current master
 	//fmt.Printf("First attempt at forwarding hall call to master: %s\n", masterID)
+    stateMutex.Lock()
+    rawHallCallSeqNum++
+    seqNum := rawHallCallSeqNum
+    stateMutex.Unlock()
+    
     msg := RawHallCallMessage{TargetID: masterID, SenderID: config.LocalID, Floor: hallCall.Floor, Button: hallCall.Button, Ack: false}
     //txRawHallCallChan <- msg
 	timeout := time.After(10 * time.Second)
@@ -254,10 +273,21 @@ func SendRawHallCall(masterID string, hallCall elevio.ButtonEvent) {
 	}
 }
 
+// -----------------------------------------------------------------------------
+// Light and Order Status Management
+// -----------------------------------------------------------------------------
+func startReceivingHallCallStatus(orderStatusChan chan OrderStatusMessage) {
+    go func() {
+        for {
+            msg := <-rxOrderStatusChan
+            orderStatusChan <- msg
+        }
+    }()
+    go bcast.Receiver(statusPort, rxOrderStatusChan)
+
 func SendOrderStatus(msg OrderStatusMessage) {
     txOrderStatusChan <- msg
 }
-
 
 func SendLightOrder(buttonLight elevio.ButtonEvent, lightOnOrOff LightStatus) {
 	stateMutex.Lock()

@@ -37,12 +37,14 @@ var LocalID string
 
 // Initialize LocalID based on hostname
 func InitConfig() {
-	hostname, err := os.Hostname()
-	if err != nil {
-		LocalID = "elevator_unknown"
-	} else {
-		LocalID = "elevator_" + hostname // Example: "elevator_PC1"
+	fmt.Println("Initializing connection to simulator/elevator...")
+
+	port := os.Getenv("ELEVATOR_PORT")
+	if port == "" {
+    	port = "15657" // Default
 	}
+	elevio.Init("localhost:" + port, NumFloors)
+
 	// Allow for multiple elevators on the same machine
 	if id := os.Getenv("ELEVATOR_ID"); id != "" {
 		LocalID = id
@@ -51,4 +53,5 @@ func InitConfig() {
 		rand.New(rand.NewSource(time.Now().UnixNano()))
 		LocalID = fmt.Sprintf("%s_%d", LocalID, rand.Intn(1000))
 	}
+	fmt.Printf("This elevator's ID: %s\n", LocalID)
 }

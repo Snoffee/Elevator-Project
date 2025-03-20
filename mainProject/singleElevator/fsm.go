@@ -1,11 +1,3 @@
-// In:
-//		Elevator state updates (from `handler.go` when a floor is reached).
-//		Obstruction status (from `handler.go` when obstruction event occurs).
-//
-// Out:
-//		GetElevatorState() → Returns elevator's current state to other modules.
-//		HandleStateTransition() → Determines the next action for the elevator.
-
 package singleElevator
 
 import (

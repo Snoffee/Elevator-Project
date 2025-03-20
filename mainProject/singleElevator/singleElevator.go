@@ -1,13 +1,3 @@
-// In:
-//		assignedHallCallChan (from `orderAssignment`) → Receives assigned hall calls.
-//		drv_buttons (from `elevio`) → Detects button presses.
-//		drv_floors (from `elevio`) → Detects floor arrival events.
-//		drv_obstr (from `elevio`) → Detects obstruction events.
-
-// Out:
-//		hallCallChan → Sends hall call requests to `orderAssignment`.
-//		network.BroadcastElevatorStatus() → Updates other elevators on status.
-
 package singleElevator
 
 import (
@@ -18,12 +8,6 @@ import (
 	"fmt"
 	"time"
 )
-
-// Elevator heartbeat message
-type Heartbeat struct {
-	ID        string
-	Timestamp time.Time
-}
 
 // **Run Single Elevator Logic**
 func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage) {

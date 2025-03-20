@@ -1,9 +1,3 @@
-// In:
-//	elevatorStateChan (from network.go) → Receives the latest elevator states to decide the master.
-//
-// Out:
-//	masterChan (used by network.go & order_assignment.go) → Notifies all modules when a new master is elected.
-
 package masterElection
 
 import (

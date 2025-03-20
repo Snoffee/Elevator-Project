@@ -9,24 +9,11 @@ import (
 	"mainProject/masterElection"
 	"mainProject/peerMonitor"
 	"mainProject/orderAssignment"
-	"fmt"
-	"os"
 )
 
 func main() {
-	fmt.Println("Initializing connection to simulator...")
-
-	port := os.Getenv("ELEVATOR_PORT")
-	if port == "" {
-    	port = "15657" // Default
-	}
-	elevio.Init("localhost:" + port, config.NumFloors)
-
-	// Initialize elevator state
 	singleElevator.InitElevator()
-	// Initialize local ID
 	config.InitConfig()
-	fmt.Printf("This elevator's ID: %s\n", config.LocalID)
 
 	peerUpdates := make(chan peers.PeerUpdate)
 	elevatorStateChan := make(chan map[string]network.ElevatorStatus) // Elevator state updates

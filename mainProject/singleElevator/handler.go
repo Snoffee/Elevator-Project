@@ -1,16 +1,3 @@
-// In:
-//		Button press events (from `drv_buttons` in `single_elevator.go`).
-//		Floor arrival events (from `drv_floors` in `single_elevator.go`).
-//		Obstruction status (from `drv_obstr` in `single_elevator.go`).
-//		Assigned hall calls (from `order_assignment` via `assignedHallCallChan`).
-//		Hall call assignments (from `network.BroadcastHallAssignment`).
-
-// Out:
-//		hallCallChan → Sends hall call requests to `order_assignment`.
-//		Updates `elevator.Queue` when a button is pressed or assigned.
-//		Handles door opening/closing and state transitions.
-
-
 package singleElevator
 
 import (

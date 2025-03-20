@@ -1,15 +1,3 @@
-// In:
-//	peer_monitor.go (via UpdateElevatorStates()) → Updates the global elevator state map.
-//	master_election.go (via masterChan) → Updates the master ID.
-//	single_elevator.go (via BroadcastElevatorStatus()) → Sends individual elevator status updates.
-//      bcast.Receiver() → Receives elevator status updates from other elevators.
-//     	bcast.Receiver() → Receives hall call confirmations.
-
-// Out:
-//	elevatorStateChan → (Used by order_assignment.go & master_election.go) Sends the latest global elevator states.
-//	orderStatusChan → (Used by order_assignment.go) Sends confirmation of hall calls.
-//  	bcast.Transmitter() → Broadcasts elevator states to all nodes via UDP.
-
 package network
 
 import (
@@ -91,17 +79,17 @@ type LightOrderMessage struct {
 // Global Variables
 // -----------------------------------------------------------------------------
 var (
-	elevatorStates       = make(map[string]ElevatorStatus) // Global map to track all known elevators
-	backupElevatorStates = make(map[string]ElevatorStatus)
-	stateMutex	     sync.Mutex
-	txElevatorStatusChan = make(chan ElevatorStatus, 10) // Global transmitter channel
-	rxElevatorStatusChan = make(chan ElevatorStatus, 10) // Global receiver channel
-	txAssignmentChan     = make(chan AssignmentMessage, 10) // Global channel for assignments
-	txRawHallCallChan    = make(chan RawHallCallMessage, 10) // Slaves send hall call events to master
-	rxRawHallCallChan    = make(chan RawHallCallMessage, 10) // Slaves reveice hall call acks from master
-	txLightChan	     = make(chan LightOrderMessage, 20) // transmit light orders
-	rxOrderStatusChan    = make(chan OrderStatusMessage, 10) // Receive confirmation of hall calls
-	txOrderStatusChan    = make(chan OrderStatusMessage, 10) // Transmit confirmation of hall calls
+	elevatorStatuses       = make(map[string]ElevatorStatus) // Global map to track all known elevators
+	backupElevatorStatuses = make(map[string]ElevatorStatus)
+	stateMutex	             sync.Mutex
+	txElevatorStatusChan   = make(chan ElevatorStatus, 10) // Global transmitter channel
+	rxElevatorStatusChan   = make(chan ElevatorStatus, 10) // Global receiver channel
+	txAssignmentChan       = make(chan AssignmentMessage, 10) // Global channel for assignments
+	txRawHallCallChan      = make(chan RawHallCallMessage, 10) // Slaves send hall call events to master
+	rxRawHallCallChan      = make(chan RawHallCallMessage, 10) // Slaves reveice hall call acks from master
+	txLightChan	           = make(chan LightOrderMessage, 20) // transmit light orders
+	rxOrderStatusChan      = make(chan OrderStatusMessage, 10) // Receive confirmation of hall calls
+	txOrderStatusChan      = make(chan OrderStatusMessage, 10) // Transmit confirmation of hall calls
 )
 
 // -----------------------------------------------------------------------------
@@ -146,15 +134,15 @@ func UpdateElevatorStates(newPeers []string, lostPeers []string) {
 	defer stateMutex.Unlock()
 
 	for _, lostPeer := range lostPeers {
-		if _, exists := elevatorStates[lostPeer]; exists {
+		if _, exists := elevatorStatuses[lostPeer]; exists {
 			fmt.Printf("Backing up lost elevator: %s\n\n", lostPeer)
-			backupElevatorStates[lostPeer] = elevatorStates[lostPeer]
+			backupElevatorStatuses[lostPeer] = elevatorStatuses[lostPeer]
 		}
 	}
 	for _, newPeer := range newPeers {
-		if _, exists := elevatorStates[newPeer]; !exists {
+		if _, exists := elevatorStatuses[newPeer]; !exists {
 			fmt.Printf("Adding new elevator %s to state map\n", newPeer)
-			elevatorStates[newPeer] = ElevatorStatus{
+			elevatorStatuses[newPeer] = ElevatorStatus{
 				ID:        newPeer,
 				Timestamp: time.Now(),
 			}
@@ -162,13 +150,13 @@ func UpdateElevatorStates(newPeers []string, lostPeers []string) {
 	}
 	for _, lostPeer := range lostPeers {
 		fmt.Printf("Removing lost elevator %s from state map\n\n", lostPeer)
-		delete(elevatorStates, lostPeer)
+		delete(elevatorStatuses, lostPeer)
 	}
 }
 
 // Returns the backup state of lost elevators for cab call reassignment.
 func GetBackupState() map[string]ElevatorStatus {
-	return backupElevatorStates
+	return backupElevatorStatuses
 }
 
 // Ensures that all modules periodically receive the latest state of all elevators.
@@ -178,7 +166,7 @@ func startPeriodicStateUpdates(elevatorStateChan chan map[string]ElevatorStatus)
         for {
             stateMutex.Lock()
             copyMap := make(map[string]ElevatorStatus)
-            for k, v := range elevatorStates {
+            for k, v := range elevatorStatuses {
                 copyMap[k] = v
             }
             stateMutex.Unlock()
@@ -212,7 +200,7 @@ func ReceiveElevatorStatus(rxElevatorStatusChan chan ElevatorStatus) {
 		hallAssignment := <-rxElevatorStatusChan
 
 		stateMutex.Lock()
-		elevatorStates[hallAssignment.ID] = hallAssignment
+		elevatorStatuses[hallAssignment.ID] = hallAssignment
 		stateMutex.Unlock()
 	}
 }
@@ -283,7 +271,7 @@ func SendLightOrder(buttonLight elevio.ButtonEvent, lightOnOrOff LightStatus) {
 	stateMutex.Lock()
     defer stateMutex.Unlock()
     // Create tagged light order messages
-	for _, elevator := range elevatorStates {
+	for _, elevator := range elevatorStatuses {
 		if elevator.ID == config.LocalID {
 			continue
 		}

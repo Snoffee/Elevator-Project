@@ -1,7 +1,6 @@
 package main
 
 import (
-	"Main_project/network/peers"
 	"fmt"
 	"log"
 	"os"
@@ -28,20 +27,30 @@ func main() {
 
 // Monitor a Single Elevator via Peer Network
 func monitorElevator() {
-	peerUpdateChan := make(chan peers.PeerUpdate)
-
-	go peers.Receiver(30001, peerUpdateChan)
-
 	for {
-		update := <-peerUpdateChan
+        // Check if the elevator process is running
+        if !isElevatorRunning(elevatorID) {
+            log.Printf("Elevator %s is not running! Restarting...", elevatorID)
+            go restartElevator(elevatorID)
+        }
+        time.Sleep(5 * time.Second) // Check every 5 seconds
+    }
+}
 
-		for _, lostElevator := range update.Lost {
-			if lostElevator == elevatorID {
-				log.Printf("Elevator %s disconnected! Restarting...", lostElevator)
-				go restartElevator(lostElevator)
-			}
-		}
-		time.Sleep(1 * time.Second) 
+func isElevatorRunning(elevatorID string) bool {
+    var cmd *exec.Cmd
+
+    if runtime.GOOS == "windows" {
+        // Use PowerShell to check for the process on Windows
+        psCommand := fmt.Sprintf(`Get-Process | Where-Object { $_.Path -like "*elevator_%s*" }`, elevatorID)
+        cmd = exec.Command("powershell", "-Command", psCommand)
+    } else if runtime.GOOS == "linux" {
+        // Use pgrep to check for the process on Linux
+        cmd = exec.Command("pgrep", "-f", fmt.Sprintf("elevator_%s", elevatorID))
+    }
+
+    err := cmd.Run()
+    return err == nil // If the command succeeds, the process is running
 	}
 }
 

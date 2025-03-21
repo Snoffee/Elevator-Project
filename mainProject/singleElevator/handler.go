@@ -117,7 +117,7 @@ func ProcessFloorArrival(floor int, orderStatusChan chan network.OrderStatusMess
 }
 
 // **Handles obstruction events**
-func ProcessObstruction(obstructed bool, hallCallChan chan elevio.ButtonEvent, lostPeerChan chan string, newPeerChan chan string) {
+func ProcessObstruction(obstructed bool) {
 	elevator.Obstructed = obstructed
 
 	if elevator.State != config.DoorOpen {
@@ -129,23 +129,6 @@ func ProcessObstruction(obstructed bool, hallCallChan chan elevio.ButtonEvent, l
 		elevio.SetMotorDirection(elevio.MD_Stop)
 		elevio.SetDoorOpenLamp(true)
 		elevator.State = config.DoorOpen
-
-		go func(){
-			obstructionTimer := time.Now()
-			for elevator.Obstructed {
-				if time.Since(obstructionTimer) > config.NotMovingTimeLimit * time.Second {
-					fmt.Println("Obstruction detected for too long. Redistributing hall calls...")
-					forceShutdown("obstruction")
-					redistributeHallCalls(hallCallChan)
-
-                    // Notify the system to temporarily remove this elevator from active peers
-                    fmt.Printf("Removing obstructed elevator %s from active peers...\n", config.LocalID)
-                    lostPeerChan <- config.LocalID
-                    break
-				}
-				time.Sleep(100 * time.Millisecond)
-			}
-		}()
 	} else {
 		fmt.Println("Obstruction cleared, transitioning to Idle...")
 		go func() {
@@ -154,10 +137,6 @@ func ProcessObstruction(obstructed bool, hallCallChan chan elevio.ButtonEvent, l
 				elevator.State = config.Idle
 				elevio.SetDoorOpenLamp(false)
 				HandleStateTransition()
-
-				// Notify the system to re-add this elevator to active peers
-                fmt.Printf("Re-adding elevator %s to active peers...\n", config.LocalID)
-                newPeerChan <- config.LocalID
 			}
 		}()
 	}
@@ -219,19 +198,5 @@ func handleAssignedNetworkHallCall(msg network.AssignmentMessage, orderStatusCha
 	}
 }
 
-func redistributeHallCalls(hallCallChan chan elevio.ButtonEvent) {
-    for floor := 0; floor < config.NumFloors; floor++ {
-        for button := elevio.BT_HallUp; button <= elevio.BT_HallDown; button++ {
-            if elevator.Queue[floor][button] {
-                // Send the hall call to the network for reassignment
-                fmt.Printf("Redistributing hall call: Floor %d, Button %v\n", floor, button)
-                hallCallChan <- elevio.ButtonEvent{Floor: floor, Button: button}
 
-                // Clear the hall call from the local queue
-                elevator.Queue[floor][button] = false
-                elevio.SetButtonLamp(button, floor, false)
-            }
-        }
-    }
-}
 

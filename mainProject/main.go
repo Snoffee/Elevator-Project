@@ -12,8 +12,8 @@ import (
 )
 
 func main() {
-	singleElevator.InitElevator()
 	config.InitConfig()
+	singleElevator.InitElevator()
 
 	peerUpdates 		 := make(chan peers.PeerUpdate)
 	elevatorStatusesChan := make(chan map[string]network.ElevatorStatus) 
@@ -25,7 +25,7 @@ func main() {
 	assignedHallCallChan := make(chan elevio.ButtonEvent, 20) // Receive assigned hall calls
 
 	// Start single_elevator
-	go singleElevator.RunSingleElevator(hallCallChan, assignedHallCallChan, orderStatusChan, lostPeerChan, newPeerChan)
+	go singleElevator.RunSingleElevator(hallCallChan, assignedHallCallChan, orderStatusChan)
 
 	// Start Peer Monitoring
 	go peerMonitor.RunMonitorPeers(peerUpdates, lostPeerChan, newPeerChan)

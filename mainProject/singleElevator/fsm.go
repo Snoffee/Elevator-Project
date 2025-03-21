@@ -10,6 +10,7 @@ import (
 
 var elevator config.Elevator
 var stopTimeout chan bool
+var obstructionTimeout chan bool
 
 // **Get the entire elevator state**
 func GetElevatorState() config.Elevator {
@@ -38,6 +39,7 @@ func InitElevator() {
 		}
 	}
 	//Correctly sets current floor
+	elevator.Obstructed = elevio.GetObstruction()
 	floor := elevio.GetFloor()
 	fmt.Printf("Read initial floor as %v\n", floor)
 	switch floor{
@@ -53,6 +55,7 @@ func InitElevator() {
 		elevator.Floor = elevio.GetFloor()
 	}
 	elevio.SetFloorIndicator(elevator.Floor)
+	elevator.State = config.DoorOpen
 	fmt.Printf("I'm starting at floor %v\n", elevator.Floor)
 }
 
@@ -88,6 +91,7 @@ func HandleStateTransition() {
 	case config.DoorOpen:
 		if elevator.Obstructed {
 			fmt.Println("Door remains open due to obstruction.")
+			startObstructionTimeout()
 			return
 		}
 		go func() {
@@ -107,15 +111,40 @@ func HandleStateTransition() {
 func startTimeout(e config.Elevator) {
 	stopTimeout = make(chan bool, 1) // Reset timeout channel
 	timeLimit := time.Duration(config.NotMovingTimeLimit) * time.Second
-	select {
-	case <-time.After(timeLimit):
-		if e.State == config.Moving && elevio.GetFloor() != e.Destination {
-			fmt.Printf("Power loss detected. Failed to reach floor %d from floor %d\n", e.Destination, e.Floor)
-			forceShutdown("power loss")
-		} 
-	case <-stopTimeout:
-		return // Cancel timeout if a movment starts
+	go func() {
+		select {
+		case <-time.After(timeLimit):
+			if e.State == config.Moving && elevio.GetFloor() != e.Destination {
+				fmt.Printf("Power loss detected. Failed to reach floor %d from floor %d\n", e.Destination, e.Floor)
+				forceShutdown("power loss")
+			} 
+		case <-stopTimeout:
+			return // Cancel timeout if a movment starts
+		}
+	}()
+}
+
+func startObstructionTimeout() {
+	if obstructionTimeout != nil {
+		obstructionTimeout <- true  // Cancel previous timeout if one exists
 	}
+
+	obstructionTimeout = make(chan bool, 1)
+	timeLimit := time.Duration(config.NotMovingTimeLimit) * time.Second
+
+	go func() {
+		fmt.Println("Starting obstruction timeout...")
+		select {
+		case <-time.After(timeLimit):
+			if elevator.Obstructed && elevator.State == config.DoorOpen {
+				fmt.Println("Obstruction lasted for too long. Shutting down...")
+				forceShutdown("obstruction")
+			}
+		case <-obstructionTimeout:
+			fmt.Println("Obstruction timeout canceled successfully.")
+			return
+		}
+	}()
 }
 
 // Variable to hold the forceShutdown function, allowing it to be mocked during testing

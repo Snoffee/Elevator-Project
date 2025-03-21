@@ -10,7 +10,7 @@ import (
 )
 
 // **Run Single Elevator Logic**
-func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage, lostPeerChan chan string, newPeerChan chan string) {
+func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage) {
 	// Initialize elevator hardware event channels
 	buttonPress       := make(chan elevio.ButtonEvent)
 	floorSensor       := make(chan int)
@@ -51,7 +51,7 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 			ProcessFloorArrival(floorEvent, orderStatusChan) // Handle floor sensor event
 
 		case obstructionEvent := <-obstructionSwitch:
-			ProcessObstruction(obstructionEvent, hallCallChan, lostPeerChan, newPeerChan) // Handle obstruction event
+			ProcessObstruction(obstructionEvent) // Handle obstruction event
 		
 		// Hall calls
 		case assignedOrder := <-assignedHallCallChan:

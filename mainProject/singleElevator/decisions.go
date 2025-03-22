@@ -58,42 +58,6 @@ func hasOrdersAtFloor(floor int) bool {
 	return elevator.Queue[floor] != [config.NumButtons]bool{false}
 }
 
-// **Get the next destination for the elevator**
-func getNextDestination(elevator config.Elevator, direction elevio.MotorDirection) int {
-	switch direction {
-	case elevio.MD_Up:
-		return getHighestOrderAbove(elevator)
-	case elevio.MD_Down:
-		return getLowestOrderBelow(elevator)
-	default:
-		return elevator.Floor
-	}
-}
-
-// **Get the highest order above the current floor**
-func getHighestOrderAbove(elevator config.Elevator) int {
-	for f := elevator.Floor + 1; f < config.NumFloors; f++ {
-		for b := 0; b < config.NumButtons; b++ {
-			if elevator.Queue[f][b] {
-				return f
-			}
-		}
-	}
-	return elevator.Floor
-}
-
-// **Get the lowest order below the current floor**
-func getLowestOrderBelow(elevator config.Elevator) int {
-	for f := elevator.Floor - 1; f >= 0; f-- {
-		for b := 0; b < config.NumButtons; b++ {
-			if elevator.Queue[f][b] {
-				return f
-			}
-		}
-	}
-	return elevator.Floor
-}
-
 // **Clears orders at a given floor**
 func clearFloorOrders(floor int) {
 	elevator.Queue[floor] = [config.NumButtons]bool{false}

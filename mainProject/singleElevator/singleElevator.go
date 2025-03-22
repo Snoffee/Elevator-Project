@@ -8,18 +8,26 @@ import (
 	"fmt"
 	"time"
 )
-
+var movementTimer = time.NewTimer(20 * time.Second)
+var obstructionTimer = time.NewTimer(20 * time.Second)
+	
 // **Run Single Elevator Logic**
 func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage) {
+	
+	movementTimer.Stop()
+	obstructionTimer.Stop()
+
 	// Initialize elevator hardware event channels
 	buttonPress       := make(chan elevio.ButtonEvent)
 	floorSensor       := make(chan int)
 	obstructionSwitch := make(chan bool)
 
+
 	// Start polling hardware for events
 	go elevio.PollButtons(buttonPress)
 	go elevio.PollFloorSensor(floorSensor)
 	go elevio.PollObstructionSwitch(obstructionSwitch)
+	
 
 	fmt.Println("Single Elevator Module Running...")
 
@@ -71,7 +79,15 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 					elevio.SetButtonLamp(lightOrder.ButtonEvent.Button, lightOrder.ButtonEvent.Floor, true)
 				}
 			}
+		case <- movementTimer.C:
+			//stop the elevator due to timeout
+			forceShutdown("power loss")
+
+		case <- obstructionTimer.C:
+			//stop the elevator due to timeout
+			forceShutdown("obstructed too long")
 		}
+		
 		network.BroadcastElevatorStatus(GetElevatorState())
 		time.Sleep(300 * time.Millisecond)
 	}

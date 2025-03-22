@@ -9,8 +9,6 @@ import (
 )
 
 var elevator config.Elevator
-var stopTimeout chan bool
-var obstructionTimeout chan bool
 
 // **Get the entire elevator state**
 func GetElevatorState() config.Elevator {
@@ -55,8 +53,14 @@ func InitElevator() {
 		elevator.Floor = elevio.GetFloor()
 	}
 	elevio.SetFloorIndicator(elevator.Floor)
-	elevator.State = config.DoorOpen
 	fmt.Printf("I'm starting at floor %v\n", elevator.Floor)
+
+	elevator.State = config.DoorOpen
+	if elevator.Floor != -1 {
+		elevio.SetDoorOpenLamp(true)
+		time.Sleep(config.DoorOpenTime * time.Second)
+		elevio.SetDoorOpenLamp(false)
+	}
 }
 
 // **Handles state transitions**
@@ -65,86 +69,43 @@ func HandleStateTransition() {
 
 	switch elevator.State {
 	case config.Idle:
+		obstructionTimer.Stop()
 		nextDir := ChooseDirection(elevator)
 		fmt.Printf("ChooseDirection() returned: %v\n", nextDir) 
 		if nextDir != elevio.MD_Stop {
 			fmt.Println("Transitioning from Idle to Moving...")
+			// Cancel previous timeout and start a new one
+			movementTimer.Reset(config.NotMovingTimeLimit * time.Second)
 			elevator.State = config.Moving
 			elevator.Direction = nextDir
 			elevio.SetMotorDirection(nextDir)
 
-			// Track destination and start timer
-			elevator.Destination = getNextDestination(elevator, nextDir)
-			elevator.MoveStartTime = time.Now()
-
-			// Cancel previous timeout and start a new one
-			if stopTimeout != nil {
-				stopTimeout <- true
-			}
-			go startTimeout(elevator)
 		} else {
 			fmt.Println("No pending orders, staying in Idle.")
+			movementTimer.Stop()
 		}
 	case config.Moving:
+		obstructionTimer.Stop()
 		fmt.Println("Elevator is moving...")
 		elevio.SetMotorDirection(elevator.Direction)
 	case config.DoorOpen:
+		movementTimer.Stop()
 		if elevator.Obstructed {
 			fmt.Println("Door remains open due to obstruction.")
-			startObstructionTimeout()
+			obstructionTimer.Reset(config.ObstructionTimeLimit * time.Second)
 			return
 		}
 		go func() {
-			time.Sleep(config.DoorOpenTime * time.Second)
-			if !elevator.Obstructed { 
+		time.Sleep(config.DoorOpenTime*time.Second)
+			if !elevator.Obstructed {
 				fmt.Println("Transitioning from DoorOpen to Idle...")
 				elevio.SetDoorOpenLamp(false)
 				elevator.State = config.Idle
 				HandleStateTransition()
-			}
+		}
 		}()
-	}
 	fmt.Println()
-}
-
-// **Start timeout to check if the elevator reaches the destination within a time limit**
-func startTimeout(e config.Elevator) {
-	stopTimeout = make(chan bool, 1) // Reset timeout channel
-	timeLimit := time.Duration(config.NotMovingTimeLimit) * time.Second
-	go func() {
-		select {
-		case <-time.After(timeLimit):
-			if e.State == config.Moving && elevio.GetFloor() != e.Destination {
-				fmt.Printf("Power loss detected. Failed to reach floor %d from floor %d\n", e.Destination, e.Floor)
-				forceShutdown("power loss")
-			} 
-		case <-stopTimeout:
-			return // Cancel timeout if a movment starts
-		}
-	}()
-}
-
-func startObstructionTimeout() {
-	if obstructionTimeout != nil {
-		obstructionTimeout <- true  // Cancel previous timeout if one exists
 	}
-
-	obstructionTimeout = make(chan bool, 1)
-	timeLimit := time.Duration(config.NotMovingTimeLimit) * time.Second
-
-	go func() {
-		fmt.Println("Starting obstruction timeout...")
-		select {
-		case <-time.After(timeLimit):
-			if elevator.Obstructed && elevator.State == config.DoorOpen {
-				fmt.Println("Obstruction lasted for too long. Shutting down...")
-				forceShutdown("obstruction")
-			}
-		case <-obstructionTimeout:
-			fmt.Println("Obstruction timeout canceled successfully.")
-			return
-		}
-	}()
 }
 
 // Variable to hold the forceShutdown function, allowing it to be mocked during testing
@@ -152,5 +113,3 @@ var forceShutdown = func(reason string) {
 	fmt.Printf("Forcefully shutting down the system due to: %s\n", reason)
 	os.Exit(1)
 }
-
-

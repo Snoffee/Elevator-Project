@@ -24,8 +24,7 @@ func TestHandlePowerLoss(t *testing.T) {
 		State:         config.Idle,
 		Obstructed:    false,
 		Queue:         [config.NumFloors][config.NumButtons]bool{},
-		MoveStartTime: time.Now(),
-		Destination:   1,
+
 	}
 
 	// Override the forceShutdown function with mock
@@ -34,10 +33,10 @@ func TestHandlePowerLoss(t *testing.T) {
 	// Simulate starting to move
 	elevator.State = config.Moving
 	elevator.Direction = elevio.MD_Up
-	elevator.MoveStartTime = time.Now()
+
 
 	// Start timeout and check for power loss
-	startTimeout(elevator)
+	movementTimer.Reset(config.NotMovingTimeLimit * time.Second)
 
 	// Wait for the timeout duration plus a buffer to ensure HandlePowerLoss is called
 	time.Sleep(config.NotMovingTimeLimit*time.Second + 1*time.Second)
@@ -71,8 +70,6 @@ func TestSafeguardInvalidFloor(t *testing.T) {
 		State:         config.Idle,
 		Obstructed:    false,
 		Queue:         [config.NumFloors][config.NumButtons]bool{},
-		MoveStartTime: time.Now(),
-		Destination:   1,
 	}
 
 	// Override the forceShutdown function with mock
@@ -103,8 +100,6 @@ func TestValidFloorTransition(t *testing.T) {
 		State:         config.Idle,
 		Obstructed:    false,
 		Queue:         [config.NumFloors][config.NumButtons]bool{},
-		MoveStartTime: time.Now(),
-		Destination:   1,
 	}
 
 	// Ensure no shutdown for valid floor

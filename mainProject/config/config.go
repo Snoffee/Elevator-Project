@@ -22,15 +22,14 @@ type Elevator struct {
 	Queue       [NumFloors][NumButtons]bool
 	State       ElevatorState
 	Obstructed  bool
-	Destination int
-	MoveStartTime   time.Time
 }
 
 const (
 	NumFloors  = 4
 	NumButtons = 3
 	DoorOpenTime = 3 // Seconds
-	NotMovingTimeLimit = 4 // Seconds
+	NotMovingTimeLimit = 6 // Seconds
+	ObstructionTimeLimit = 8 // Seconds
 )
 
 var LocalID string

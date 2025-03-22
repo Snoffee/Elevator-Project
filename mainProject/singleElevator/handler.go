@@ -33,19 +33,17 @@ func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.Butto
 func ProcessFloorArrival(floor int, orderStatusChan chan network.OrderStatusMessage) {
 	fmt.Printf("Floor sensor triggered: %+v\n", floor)
 	elevio.SetFloorIndicator(floor)
-	
-	if stopTimeout != nil {
-		stopTimeout <- true
-	}
+	movementTimer.Reset(config.NotMovingTimeLimit * time.Second)
 
 	if !hasOrdersAtFloor(floor) {
 		return
 	}
-	
 	// Stop immediately if orders at current floor
 	elevio.SetMotorDirection(elevio.MD_Stop)
 	elevator.Floor = floor
 	fmt.Printf("Elevator position updated: Now at Floor %d\n\n", elevator.Floor)
+
+	
 
 	hasUpCall := elevator.Queue[floor][elevio.BT_HallUp]
 	hasDownCall := elevator.Queue[floor][elevio.BT_HallDown]
@@ -110,10 +108,10 @@ func ProcessFloorArrival(floor int, orderStatusChan chan network.OrderStatusMess
 			orderStatusChan <- msg
 			network.SendOrderStatus(msg)
 		}()
-	}
-	network.BroadcastElevatorStatus(elevator) 
-	
+	} 
+	network.BroadcastElevatorStatus(elevator)
 	HandleStateTransition()
+	//startDoorOpenTimeout()
 }
 
 // **Handles obstruction events**
@@ -129,6 +127,7 @@ func ProcessObstruction(obstructed bool) {
 		elevio.SetMotorDirection(elevio.MD_Stop)
 		elevio.SetDoorOpenLamp(true)
 		elevator.State = config.DoorOpen
+		HandleStateTransition()
 	} else {
 		fmt.Println("Obstruction cleared, transitioning to Idle...")
 		go func() {
@@ -197,6 +196,3 @@ func handleAssignedNetworkHallCall(msg network.AssignmentMessage, orderStatusCha
 		}
 	}
 }
-
-
-

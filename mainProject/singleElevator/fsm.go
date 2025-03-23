@@ -92,18 +92,11 @@ func HandleStateTransition() {
 		movementTimer.Stop()
 		if elevator.Obstructed {
 			fmt.Println("Door remains open due to obstruction.")
+			doorTimer.Stop()
 			obstructionTimer.Reset(config.ObstructionTimeLimit * time.Second)
 			return
 		}
-		go func() {
-		time.Sleep(config.DoorOpenTime*time.Second)
-			if !elevator.Obstructed {
-				fmt.Println("Transitioning from DoorOpen to Idle...")
-				elevio.SetDoorOpenLamp(false)
-				elevator.State = config.Idle
-				HandleStateTransition()
-		}
-		}()
+		doorTimer.Reset(config.DoorOpenTime * time.Second)
 	fmt.Println()
 	}
 }

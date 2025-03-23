@@ -2,6 +2,7 @@
 # Usage: ./start_system.sh <ELEVATOR_ID> <ELEVATOR_PORT>
 # Example: ./start_system.sh elevator_2 15658
 # Note: If no parameters are provided, the script will default to elevator_1 and port 15657.
+# chmod +x start_system.sh to make the file executable
 
 #!/bin/bash
 
@@ -10,7 +11,7 @@ ELEVATOR_ID=${1:-"elevator_1"}   # Default to "elevator_1" if not provided
 ELEVATOR_PORT=${2:-"15657"}      # Default to "15657" if not provided
 
 echo "Starting Simulator for $ELEVATOR_ID on port $ELEVATOR_PORT..."
-gnome-terminal -- bash -c "export SERVER_PORT=$ELEVATOR_PORT; elevatorserver; exec bash" #elevatorserver or filepath to sim ./SimElevatorServer
+gnome-terminal -- bash -c "export SERVER_PORT=$ELEVATOR_PORT; simelevatorserver; exec bash" #elevatorserver or filepath to sim ./SimElevatorServer
 
 sleep 5
 

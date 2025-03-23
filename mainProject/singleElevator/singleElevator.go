@@ -8,14 +8,22 @@ import (
 	"fmt"
 	"time"
 )
-var movementTimer = time.NewTimer(20 * time.Second)
-var obstructionTimer = time.NewTimer(20 * time.Second)
-	
+
+var (
+	movementTimer = time.NewTimer(20 * time.Second)
+	obstructionTimer = time.NewTimer(20 * time.Second)
+	doorTimer = time.NewTimer(config.DoorOpenTime * time.Second)
+	clearOppositeDirectionTimer = time.NewTimer(config.DoorOpenTime * time.Second)
+	delayedButtonEvent elevio.ButtonEvent // Store delayed call for later clearance
+)
+
 // **Run Single Elevator Logic**
 func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage) {
 	
 	movementTimer.Stop()
 	obstructionTimer.Stop()
+	doorTimer.Stop()
+	clearOppositeDirectionTimer.Stop()
 
 	// Initialize elevator hardware event channels
 	buttonPress       := make(chan elevio.ButtonEvent)
@@ -50,13 +58,13 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 
 	// Event Loop
 	for {
+		// Prioritize floor sensor events
 		select {
-		// Hardware		
+		case floorEvent := <-floorSensor:
+			ProcessFloorArrival(floorEvent, orderStatusChan) 
+		
 		case buttonEvent := <-buttonPress:
 			ProcessButtonPress(buttonEvent, hallCallChan, orderStatusChan) // Handle button press event
-		
-		case floorEvent := <-floorSensor:
-			ProcessFloorArrival(floorEvent, orderStatusChan) // Handle floor sensor event
 
 		case obstructionEvent := <-obstructionSwitch:
 			ProcessObstruction(obstructionEvent) // Handle obstruction event
@@ -86,9 +94,25 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 		case <- obstructionTimer.C:
 			//stop the elevator due to timeout
 			forceShutdown("obstructed too long")
-		}
 		
+		case <- doorTimer.C:
+			//close the door
+			if !elevator.Obstructed {
+				fmt.Println("Transitioning from DoorOpen to Idle...")
+				elevio.SetDoorOpenLamp(false)
+				elevator.State = config.Idle
+				HandleStateTransition()
+			}
+		case <- clearOppositeDirectionTimer.C:
+			//clear the opposite direction
+			fmt.Printf("Clearing delayed opposite direction call: Floor %d, Button %v\n", delayedButtonEvent.Floor, delayedButtonEvent.Button)
+			elevio.SetButtonLamp(delayedButtonEvent.Button, delayedButtonEvent.Floor, false)
+			elevator.Queue[delayedButtonEvent.Floor][delayedButtonEvent.Button] = false
+			msg := network.OrderStatusMessage{ButtonEvent: delayedButtonEvent, SenderID: config.LocalID, Status: network.Finished}
+			orderStatusChan <- msg
+			network.SendOrderStatus(msg)
+		}
 		network.BroadcastElevatorStatus(GetElevatorState())
-		time.Sleep(300 * time.Millisecond)
+		//time.Sleep(100 * time.Millisecond)
 	}
 }

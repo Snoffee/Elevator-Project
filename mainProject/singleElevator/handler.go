@@ -46,12 +46,15 @@ func ProcessFloorArrival(floor int, orderStatusChan chan network.OrderStatusMess
 	
 
 	hasUpCall := elevator.Queue[floor][elevio.BT_HallUp]
+	ordersAbove := HasOrdersAbove(elevator)
 	hasDownCall := elevator.Queue[floor][elevio.BT_HallDown]
+	ordersBelow := HasOrdersBelow(elevator)
 	hasCabCall := elevator.Queue[floor][elevio.BT_Cab]
 
 	fmt.Println("Transitioning from Moving to DoorOpen...")
 	elevator.State = config.DoorOpen
 	elevio.SetDoorOpenLamp(true)
+	doorTimer.Reset(config.DoorOpenTime * time.Second)
 
 	// **Clear Cab Call if it exists**
 	if hasCabCall {
@@ -65,25 +68,30 @@ func ProcessFloorArrival(floor int, orderStatusChan chan network.OrderStatusMess
 	var secondClearButton elevio.ButtonType
 	shouldDelaySecondClear := false
 
-	if elevator.Direction == elevio.MD_Up && hasUpCall {
-		firstClearButton = elevio.BT_HallUp
-		secondClearButton = elevio.BT_HallDown
-		shouldDelaySecondClear = hasDownCall
-	} else if elevator.Direction == elevio.MD_Down && hasDownCall {
-		firstClearButton = elevio.BT_HallDown
-		secondClearButton = elevio.BT_HallUp
-		shouldDelaySecondClear = hasUpCall
-	} else {
-		// If no ongoing direction or conflicting requests, clear based on priority
-		if hasUpCall {
-			firstClearButton = elevio.BT_HallUp
-			secondClearButton = elevio.BT_HallDown
-			shouldDelaySecondClear = hasDownCall
-		} else if hasDownCall {
+	if hasUpCall && hasDownCall{
+		shouldDelaySecondClear = true
+		if elevator.Direction == elevio.MD_Up && ordersAbove{
 			firstClearButton = elevio.BT_HallDown
 			secondClearButton = elevio.BT_HallUp
-			shouldDelaySecondClear = hasUpCall
+		}else if elevator.Direction == elevio.MD_Down && ordersBelow{
+			firstClearButton = elevio.BT_HallUp
+			secondClearButton = elevio.BT_HallDown
+		}else{
+			if ordersAbove {
+				firstClearButton = elevio.BT_HallDown
+				secondClearButton = elevio.BT_HallUp
+			} else if ordersBelow {
+				firstClearButton = elevio.BT_HallDown
+				secondClearButton = elevio.BT_HallUp
+			}
 		}
+	}else{
+		if hasUpCall{
+			firstClearButton = elevio.BT_HallUp
+		}else if hasDownCall{
+			firstClearButton = elevio.BT_HallDown
+		}
+		
 	}
 
 	// Clear the first button immediately (announce direction)
@@ -98,20 +106,13 @@ func ProcessFloorArrival(floor int, orderStatusChan chan network.OrderStatusMess
 	// If needed, delay clearing the second button (direction change)
 	if shouldDelaySecondClear {
 		fmt.Println("Keeping door open for an extra 3 seconds before changing direction...")
-		go func() {
-			time.Sleep(3 * time.Second)
-			elevio.SetButtonLamp(secondClearButton, floor, false)
-			elevator.Queue[floor][secondClearButton] = false
-			fmt.Printf("Cleared opposite hall call after delay: Floor %d, Button %v\n", floor, secondClearButton)
-			
-			msg := network.OrderStatusMessage{ButtonEvent: elevio.ButtonEvent{Floor: floor, Button: secondClearButton}, SenderID: config.LocalID, Status: network.Finished}
-			orderStatusChan <- msg
-			network.SendOrderStatus(msg)
-		}()
+		doorTimer.Reset(config.DoorOpenTime * 2 * time.Second)
+		movementTimer.Stop()
+		delayedButtonEvent = elevio.ButtonEvent{Floor: floor, Button: secondClearButton}
+		clearOppositeDirectionTimer.Reset(config.DoorOpenTime * time.Second)
 	} 
+
 	network.BroadcastElevatorStatus(elevator)
-	HandleStateTransition()
-	//startDoorOpenTimeout()
 }
 
 // **Handles obstruction events**
@@ -130,14 +131,7 @@ func ProcessObstruction(obstructed bool) {
 		HandleStateTransition()
 	} else {
 		fmt.Println("Obstruction cleared, transitioning to Idle...")
-		go func() {
-			time.Sleep(config.DoorOpenTime * time.Second)
-			if !elevator.Obstructed {
-				elevator.State = config.Idle
-				elevio.SetDoorOpenLamp(false)
-				HandleStateTransition()
-			}
-		}()
+		doorTimer.Reset(config.DoorOpenTime * time.Second)
 	}
 }
 

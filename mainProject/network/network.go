@@ -15,7 +15,7 @@ const (
 	peerPort          = 30001 // Port for receiving elevator state updates
 	assignmentPort    = 30002 // Port for broadcasting assigned hall calls
 	txrawHallCallPort = 30003 // Port for raw hall calls (hall calls received by slaves, that needs to be forwarded to the master before assigning them)
-	rxrawHallCallPort = 30004 // Port for reading the masters ack for hall calls from slaves
+	ackPort			  = 30004 // Port for reading the masters ack for hall calls from slaves
 	statusPort        = 30005 // Port for hall call confirmations
 	lightPort         = 30006 // Port for light orders (hall call lights)
 )
@@ -29,7 +29,6 @@ type ElevatorStatus struct {
 	Direction config.ElevatorState
 	Queue     [config.NumFloors][config.NumButtons]bool
 	Timestamp time.Time
-	SeqNum    int
 }
 
 type AssignmentMessage struct {
@@ -42,12 +41,15 @@ type AssignmentMessage struct {
 type RawHallCallMessage struct {
   	TargetID string
 	SenderID string
-    	Floor    int
-    	Button   elevio.ButtonType
-	Ack      bool
+    Floor    int
+    Button   elevio.ButtonType
 	SeqNum   int 
 }
 
+type AckMessage struct {
+	TargetID string
+	SeqNum 	 int
+}
 
 type OrderStatus int
 
@@ -79,17 +81,22 @@ type LightOrderMessage struct {
 // Global Variables
 // -----------------------------------------------------------------------------
 var (
-	elevatorStatuses       = make(map[string]ElevatorStatus) // Global map to track all known elevators
-	backupElevatorStatuses = make(map[string]ElevatorStatus)
-	stateMutex	             sync.Mutex
-	txElevatorStatusChan   = make(chan ElevatorStatus, 10) // Global transmitter channel
-	rxElevatorStatusChan   = make(chan ElevatorStatus, 10) // Global receiver channel
-	txAssignmentChan       = make(chan AssignmentMessage, 10) // Global channel for assignments
-	txRawHallCallChan      = make(chan RawHallCallMessage, 10) // Slaves send hall call events to master
-	rxRawHallCallChan      = make(chan RawHallCallMessage, 10) // Slaves reveice hall call acks from master
-	txLightChan	           = make(chan LightOrderMessage, 20) // transmit light orders
-	rxOrderStatusChan      = make(chan OrderStatusMessage, 10) // Receive confirmation of hall calls
-	txOrderStatusChan      = make(chan OrderStatusMessage, 10) // Transmit confirmation of hall calls
+	elevatorStatuses        = make(map[string]ElevatorStatus) // Global map to track all known elevators
+	backupElevatorStatuses  = make(map[string]ElevatorStatus)
+	stateMutex	              sync.Mutex
+	txElevatorStatusChan    = make(chan ElevatorStatus, 10) // Global transmitter channel
+	rxElevatorStatusChan    = make(chan ElevatorStatus, 10) // Global receiver channel
+	txAssignmentChan        = make(chan AssignmentMessage, 10) // Global channel for assignments
+	txRawHallCallChan       = make(chan RawHallCallMessage, 10) // Slaves send hall call events to master
+	txLightChan	            = make(chan LightOrderMessage, 20) // transmit light orders
+	rxOrderStatusChan       = make(chan OrderStatusMessage, 10) // Receive confirmation of hall calls
+	txOrderStatusChan       = make(chan OrderStatusMessage, 10) // Transmit confirmation of hall calls
+	seqNumAssignmentCounter = 0
+	seqNumRawCallCounter	= 100
+	rxAckChan				= make(chan AckMessage, 10)
+	txAckChan				= make(chan AckMessage, 10)
+	resendTimeout			= 3 * time.Second
+	giveUpTimeout			= 10 * time.Second
 )
 
 // -----------------------------------------------------------------------------
@@ -114,7 +121,9 @@ func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates ch
 	// Start broadcasting raw hall calls
 	go bcast.Transmitter(txrawHallCallPort, txRawHallCallChan)
 
-	go bcast.Receiver(rxrawHallCallPort, rxRawHallCallChan)
+	// Start receiving and transmitting acks
+	go bcast.Receiver(ackPort, rxAckChan)
+	go bcast.Transmitter(ackPort, txAckChan)
 	
 	// Hall call status
 	go bcast.Transmitter(statusPort, txOrderStatusChan)
@@ -161,7 +170,7 @@ func GetBackupState() map[string]ElevatorStatus {
 
 // Ensures that all modules periodically receive the latest state of all elevators.
 // Maintaining a consistent view of the system across all nodes, even if no immediate events occur.
-func startPeriodicStateUpdates(elevatorStateChan chan map[string]ElevatorStatus) {
+func startPeriodicStateUpdates(elevatorStatusesChan chan map[string]ElevatorStatus) {
     go func() {
         for {
             stateMutex.Lock()
@@ -170,7 +179,7 @@ func startPeriodicStateUpdates(elevatorStateChan chan map[string]ElevatorStatus)
                 copyMap[k] = v
             }
             stateMutex.Unlock()
-            elevatorStateChan <- copyMap 
+            elevatorStatusesChan <- copyMap 
             time.Sleep(100 * time.Millisecond) 
         }
     }()
@@ -210,43 +219,55 @@ func ReceiveElevatorStatus(rxElevatorStatusChan chan ElevatorStatus) {
 // -----------------------------------------------------------------------------
 // Sends an assignment message to a specific elevator for a hall call.
 func SendAssignment(targetElevator string, floor int, button elevio.ButtonType) {	
+	seqNumAssignmentCounter++
 	hallCall := AssignmentMessage{
 		TargetID: targetElevator,
 		Floor:    floor,
 		Button:   button,
+		SeqNum: seqNumAssignmentCounter,
 	}
-	
-	fmt.Printf("Sending assignment to %s for floor %d\n", targetElevator, floor)
-	txAssignmentChan <- hallCall
+	timeout := time.After(giveUpTimeout)
+	for{
+		select{
+		case ack := <- rxAckChan:
+			if ack.TargetID == targetElevator && ack.SeqNum == hallCall.SeqNum {
+				fmt.Printf("Received ack from: %s | seqNum: %d\n", targetElevator, ack.SeqNum)
+				return
+			}
+		case <-timeout:
+			fmt.Println("Timeout reached, stopping attempts")
+			return
+		default:
+			fmt.Printf("Sending assignment to %s for floor %d\n", targetElevator, hallCall.Floor)
+			txAssignmentChan <- hallCall
+			time.Sleep(resendTimeout)
+		}
+	}
 }
 
 // Sends a raw hall call event to the master elevator for assignment.
 func SendRawHallCall(masterID string, hallCall elevio.ButtonEvent) {
     if config.LocalID == masterID {
-        // This node is the master – no need to forward the call
         return
     }
-    // Send hall call directly to the current master
-	//fmt.Printf("First attempt at forwarding hall call to master: %s\n", masterID)
-    
-    msg := RawHallCallMessage{TargetID: masterID, SenderID: config.LocalID, Floor: hallCall.Floor, Button: hallCall.Button, Ack: false}
-    //txRawHallCallChan <- msg
-	timeout := time.After(10 * time.Second)
+    seqNumRawCallCounter++
+    msg := RawHallCallMessage{TargetID: masterID, SenderID: config.LocalID, Floor: hallCall.Floor, Button: hallCall.Button, SeqNum: seqNumRawCallCounter}
+	timeout := time.After(giveUpTimeout)
 	for{
 		select{
-			case potentialAck := <- rxRawHallCallChan:
-				if potentialAck.Ack == true && potentialAck.TargetID == config.LocalID && potentialAck.Floor == hallCall.Floor && potentialAck.Button == hallCall.Button {
-					fmt.Println("Received ack from master")
-					return
-				}
-			case <-timeout:
-				fmt.Println("Timeout reached, stopping attempts")
+		case ack := <- rxAckChan:
+			if ack.TargetID == config.LocalID && ack.SeqNum == msg.SeqNum {
+				fmt.Println("Received ack from master", masterID)
 				return
-			default:
-				fmt.Println("First attemt/No ack received, trying again")
-				txRawHallCallChan <- msg
-				time.Sleep(100 * time.Millisecond)
 			}
+		case <-timeout:
+			fmt.Println("Timeout reached, stopping attempts")
+			return
+		default:
+			fmt.Printf("Sending RawHallCall to master %s for floor %d\n", masterID, hallCall.Floor)
+			txRawHallCallChan <- msg
+			time.Sleep(resendTimeout)
+		}
 	}
 }
 

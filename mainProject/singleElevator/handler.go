@@ -161,33 +161,31 @@ func handleAssignedHallCall(order elevio.ButtonEvent, orderStatusChan chan netwo
 }
 
 // **Handles an assigned raw hall call from the network**
-func handleAssignedRawHallCall(rawCall network.RawHallCallMessage, hallCallChan chan elevio.ButtonEvent, rawChan chan network.RawHallCallMessage) {
+func handleAssignedRawHallCall(rawCall network.RawHallCallMessage, hallCallChan chan elevio.ButtonEvent, txAckChan chan network.AckMessage) {
     // Ignore calls not meant for this elevator
     if rawCall.TargetID != "" && rawCall.TargetID != config.LocalID {
         return
     }
-    
-    // Only process if it's not already in the queue
-    if !elevator.Queue[rawCall.Floor][rawCall.Button] {
-        fmt.Printf("Processing raw hall call: Floor %d, Button %d\n", rawCall.Floor, rawCall.Button)
-        hallCallChan <- elevio.ButtonEvent{Floor: rawCall.Floor, Button: rawCall.Button}
-		ackMsg:= network.RawHallCallMessage{TargetID: rawCall.SenderID, SenderID: config.LocalID, Floor: rawCall.Floor, Button: rawCall.Button, Ack: true}
-		fmt.Print("Sending ack to slave \n")
-		rawChan <- ackMsg
-    }
+	fmt.Printf("Processing raw hall call: Floor %d, Button %d\n", rawCall.Floor, rawCall.Button)
+	hallCallChan <- elevio.ButtonEvent{Floor: rawCall.Floor, Button: rawCall.Button}
+	ackMsg:= network.AckMessage{TargetID: rawCall.SenderID, SeqNum: rawCall.SeqNum}
+	for n:=1; n<4; n++{
+		fmt.Printf("Sending ack for RawHallCall to sender: %s | SeqNum: %d\n\n", ackMsg.TargetID, ackMsg.SeqNum)
+		txAckChan <- ackMsg
+	}
 }
 
 // **Receive Hall Assignments from Network**
 // If the best elevator was another elevator on the network the order gets sent here
-func handleAssignedNetworkHallCall(msg network.AssignmentMessage, orderStatusChan chan network.OrderStatusMessage) {
+func handleAssignedNetworkHallCall(msg network.AssignmentMessage, orderStatusChan chan network.OrderStatusMessage, txAckChan chan network.AckMessage) {
 	if msg.TargetID == config.LocalID {
 		fmt.Printf("Received hall assignment for me from network: Floor %d, Button %v\n\n", msg.Floor, msg.Button)
 		handleAssignedHallCall(elevio.ButtonEvent{Floor: msg.Floor, Button: msg.Button}, orderStatusChan)
-	} else {
-		// If this elevator previously had the request, remove it
-		if elevator.Queue[msg.Floor][msg.Button] {
-			fmt.Printf("Removing hall call at Floor %d from local queue, since assigned elsewhere\n", msg.Floor)
-			clearFloorOrders(msg.Floor)
+
+		ackMsg := network.AckMessage{TargetID: config.LocalID, SeqNum: msg.SeqNum}
+		for n:=1; n<4; n++{
+			txAckChan <- ackMsg
+			fmt.Printf("Broadcasting ack for assignment | SeqNum: %d\n\n", ackMsg.SeqNum)
 		}
 	}
 }

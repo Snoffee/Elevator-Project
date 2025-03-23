@@ -51,8 +51,8 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 	lightOrderChan := make(chan network.LightOrderMessage, 10)
 	go bcast.Receiver(30006, lightOrderChan) // lightPort
 
-	rawHallCallChan2 := make(chan network.RawHallCallMessage, 10)
-	go bcast.Transmitter(30004, rawHallCallChan2) // rawHallCallPort
+	txAckChan := make(chan network.AckMessage, 10)
+	go bcast.Transmitter(30004, txAckChan) // ackPort
 
 
 
@@ -74,10 +74,10 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 			handleAssignedHallCall(assignedOrder, orderStatusChan) // Handle local assigned hall call
 		
 		case rawCall := <-rawHallCallChan:
-			handleAssignedRawHallCall(rawCall, hallCallChan, rawHallCallChan2) // Handle global assigned hall call
+			handleAssignedRawHallCall(rawCall, hallCallChan, txAckChan) // Handle global assigned hall call
 		
 		case networkAssignedOrder := <-assignedNetworkHallCallChan:
-			handleAssignedNetworkHallCall(networkAssignedOrder, orderStatusChan) // Handle network assigned hall call
+			handleAssignedNetworkHallCall(networkAssignedOrder, orderStatusChan, txAckChan) // Handle network assigned hall call
 
 		case lightOrder := <-lightOrderChan:
 			if lightOrder.TargetID == config.LocalID {

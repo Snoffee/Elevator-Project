@@ -13,7 +13,7 @@ ELEVATOR_PORT=${2:-"15657"}      # Default to "15657" if not provided
 echo "Starting Simulator for $ELEVATOR_ID on port $ELEVATOR_PORT..."
 gnome-terminal -- bash -c "export SERVER_PORT=$ELEVATOR_PORT; simelevatorserver; exec bash" #elevatorserver or filepath to sim ./SimElevatorServer
 
-sleep 5
+sleep 2
 
 echo "Building Elevator binary for $ELEVATOR_ID..."
 go build -o ../"elevator_$ELEVATOR_ID" main.go

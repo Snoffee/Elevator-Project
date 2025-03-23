@@ -102,6 +102,8 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 				elevio.SetDoorOpenLamp(false)
 				elevator.State = config.Idle
 				HandleStateTransition()
+			}else{
+				HandleStateTransition()
 			}
 		case <- clearOppositeDirectionTimer.C:
 			//clear the opposite direction

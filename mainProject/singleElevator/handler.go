@@ -124,6 +124,7 @@ func ProcessObstruction(obstructed bool) {
 	}
 
 	if obstructed{
+		movementTimer.Stop()
 		fmt.Printf("Obstruction detected: %+v\n", obstructed)
 		elevio.SetMotorDirection(elevio.MD_Stop)
 		elevio.SetDoorOpenLamp(true)

@@ -62,6 +62,7 @@ type OrderStatusMessage struct {
     SenderID   string
     ButtonEvent elevio.ButtonEvent
 	Status     OrderStatus
+	SeqNum   int
 }
 
 type LightStatus int
@@ -75,6 +76,7 @@ type LightOrderMessage struct {
 	TargetID    string
 	ButtonEvent elevio.ButtonEvent
 	Light      LightStatus
+	SeqNum   int
 }
 
 // -----------------------------------------------------------------------------
@@ -83,7 +85,7 @@ type LightOrderMessage struct {
 var (
 	elevatorStatuses        = make(map[string]ElevatorStatus) // Global map to track all known elevators
 	backupElevatorStatuses  = make(map[string]ElevatorStatus)
-	stateMutex	              sync.Mutex
+	
 	txElevatorStatusChan    = make(chan ElevatorStatus, 10) // Global transmitter channel
 	rxElevatorStatusChan    = make(chan ElevatorStatus, 10) // Global receiver channel
 	txAssignmentChan        = make(chan AssignmentMessage, 10) // Global channel for assignments
@@ -91,12 +93,18 @@ var (
 	txLightChan	            = make(chan LightOrderMessage, 20) // transmit light orders
 	rxOrderStatusChan       = make(chan OrderStatusMessage, 10) // Receive confirmation of hall calls
 	txOrderStatusChan       = make(chan OrderStatusMessage, 10) // Transmit confirmation of hall calls
-	seqNumAssignmentCounter = 0
-	seqNumRawCallCounter	= 100
 	rxAckChan				= make(chan AckMessage, 10)
 	txAckChan				= make(chan AckMessage, 10)
+	
 	resendTimeout			= 3 * time.Second
 	giveUpTimeout			= 10 * time.Second
+
+	seqNumAssignmentCounter = 0
+	seqNumRawCallCounter	= 100
+	SeqOrderStatusCounter   = 200
+	seqLightCounter         = 300
+
+	stateMutex	              sync.Mutex
 )
 
 // -----------------------------------------------------------------------------
@@ -285,7 +293,24 @@ func startReceivingHallCallStatus(orderStatusChan chan OrderStatusMessage) {
 }
 
 func SendOrderStatus(msg OrderStatusMessage) {
-    txOrderStatusChan <- msg
+
+	timeout := time.After(giveUpTimeout)
+	for{
+		select{
+		case ack := <- rxAckChan:
+			if ack.TargetID == config.LocalID && ack.SeqNum == msg.SeqNum {
+				fmt.Printf("Received ack from master")
+				return
+			}
+		case <-timeout:
+			fmt.Println("Timeout reached, stopping attempts")
+			return
+		default:
+			fmt.Printf("Sending order status: unfinished to master")
+			txOrderStatusChan <- msg
+			time.Sleep(resendTimeout)
+		}
+	}
 }
 
 func SendLightOrder(buttonLight elevio.ButtonEvent, lightOnOrOff LightStatus) {

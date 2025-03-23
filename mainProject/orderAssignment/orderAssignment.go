@@ -57,6 +57,10 @@ func RunOrderAssignment(elevatorStatusesChan chan map[string]network.ElevatorSta
 				}
 			case status := <-orderStatusChan:
 				if latestMasterID == config.LocalID {
+					for i:=1; i<4; i++{
+						ack := network.AckMessage{TargetID: status.SenderID, SeqNum: status.SeqNum}
+						txAckChan <- ack //missing correct chan
+					}
 					if status.Status == network.Unfinished {
 						fmt.Printf("Received unfinished order status from elevator %s\n", status.SenderID)
 						network.SendLightOrder(status.ButtonEvent, network.On)

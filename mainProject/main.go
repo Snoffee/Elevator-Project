@@ -24,6 +24,8 @@ func main() {
 	orderStatusChan      := make(chan network.OrderStatusMessage, 20) // Send confirmation of hall calls
 	assignedHallCallChan := make(chan elevio.ButtonEvent, 20) // Receive assigned hall calls
 
+	//Missing ack channel ting og tang
+
 	// Start single_elevator
 	go singleElevator.RunSingleElevator(hallCallChan, assignedHallCallChan, orderStatusChan)
 

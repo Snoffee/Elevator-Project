@@ -61,6 +61,9 @@ func ProcessFloorArrival(floor int, orderStatusChan chan network.OrderStatusMess
 		elevio.SetButtonLamp(elevio.BT_Cab, floor, false)
 		elevator.Queue[floor][elevio.BT_Cab] = false
 		fmt.Printf("Cleared cab call: Floor %d\n", floor)
+		if !hasUpCall && !hasDownCall{
+			return
+		}
 	}
 
 	// Decide which direction should be cleared first

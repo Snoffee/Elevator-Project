@@ -20,6 +20,7 @@ func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.Butto
 		// If the elevator is already at the requested floor, process it immediately
 		if (elevator.Floor == event.Floor && floorSensorValue != -1){
 			fmt.Println("Cab call at current floor, processing immediately...")
+			network.BroadcastElevatorStatus(GetElevatorState())
 			ProcessFloorArrival(elevator.Floor, orderStatusChan) 
 		} else {
 			HandleStateTransition() 
@@ -157,7 +158,7 @@ func handleAssignedHallCall(order elevio.ButtonEvent, orderStatusChan chan netwo
 	// If the elevator is already at the assigned floor, immediately process it
     if elevator.Floor == order.Floor && floorSensorValue != -1{
         fmt.Println("Already at assigned floor, processing immediately...")
-        ProcessFloorArrival(elevator.Floor, orderStatusChan)
+		ProcessFloorArrival(elevator.Floor, orderStatusChan)
     } else {
         network.BroadcastElevatorStatus(GetElevatorState())
         HandleStateTransition()
@@ -173,10 +174,9 @@ func handleAssignedRawHallCall(rawCall network.RawHallCallMessage, hallCallChan 
 	fmt.Printf("Processing raw hall call: Floor %d, Button %d\n", rawCall.Floor, rawCall.Button)
 	hallCallChan <- elevio.ButtonEvent{Floor: rawCall.Floor, Button: rawCall.Button}
 	ackMsg:= network.AckMessage{TargetID: rawCall.SenderID, SeqNum: rawCall.SeqNum}
-	for n:=1; n<4; n++{
-		fmt.Printf("Sending ack for RawHallCall to sender: %s | SeqNum: %d\n\n", ackMsg.TargetID, ackMsg.SeqNum)
-		txAckChan <- ackMsg
-	}
+	fmt.Printf("Sending ack for RawHallCall to sender: %s | SeqNum: %d\n\n", ackMsg.TargetID, ackMsg.SeqNum)
+	txAckChan <- ackMsg
+	
 }
 
 // **Receive Hall Assignments from Network**
@@ -187,9 +187,8 @@ func handleAssignedNetworkHallCall(msg network.AssignmentMessage, orderStatusCha
 		handleAssignedHallCall(elevio.ButtonEvent{Floor: msg.Floor, Button: msg.Button}, orderStatusChan)
 
 		ackMsg := network.AckMessage{TargetID: config.LocalID, SeqNum: msg.SeqNum}
-		for n:=1; n<4; n++{
-			txAckChan <- ackMsg
-			fmt.Printf("Broadcasting ack for assignment | SeqNum: %d\n\n", ackMsg.SeqNum)
-		}
+		txAckChan <- ackMsg
+		fmt.Printf("Broadcasting ack for assignment | SeqNum: %d\n\n", ackMsg.SeqNum)
+		
 	}
 }

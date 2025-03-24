@@ -95,7 +95,7 @@ var (
 	txOrderStatusChan       = make(chan OrderStatusMessage, 10) // Transmit confirmation of hall calls
 	rxAckChan				= make(chan AckMessage, 10)
 	
-	resendTimeout			= 3 * time.Second
+	resendTimeout			= 8 * time.Second
 	giveUpTimeout			= 10 * time.Second
 
 	seqNumAssignmentCounter = 0
@@ -104,8 +104,8 @@ var (
 	seqLightCounter         = 300
 
 	stateMutex	              sync.Mutex
-	//pendingAcks   		    = make(map[int]chan struct{})
-    //pendingAcksMutex 		  sync.Mutex
+	pendingAcks   		    = make(map[int]chan struct{})
+    pendingAcksMutex 		  sync.Mutex
 )
 
 // -----------------------------------------------------------------------------
@@ -140,6 +140,20 @@ func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates ch
 	
 	// Start broadcasting light orders
 	go bcast.Transmitter(lightPort, txLightChan)
+
+	go func() {
+		for ack := range rxAckChan {
+			pendingAcksMutex.Lock()
+			if ackChan, exists := pendingAcks[ack.SeqNum]; exists {
+				fmt.Printf("ACK received for SeqNum: %d from %s\n", ack.SeqNum, ack.TargetID)
+				close(ackChan)
+				delete(pendingAcks, ack.SeqNum)
+			} else {
+				fmt.Printf("Unexpected ACK received: SeqNum: %d from %s (Possibly already processed)\n", ack.SeqNum, ack.TargetID)
+			}
+			pendingAcksMutex.Unlock()
+		}
+	}()
 }
 
 // -----------------------------------------------------------------------------
@@ -235,23 +249,33 @@ func SendAssignment(targetElevator string, floor int, button elevio.ButtonType) 
 		Button:   button,
 		SeqNum: seqNumAssignmentCounter,
 	}
+	ackChan := make(chan struct{})
+	pendingAcksMutex.Lock()
+	pendingAcks[hallCall.SeqNum] = ackChan
+	pendingAcksMutex.Unlock()
+
 	timeout := time.After(giveUpTimeout)
-	for{
-		select{
-		case ack := <- rxAckChan:
-			if ack.TargetID == targetElevator && ack.SeqNum == hallCall.SeqNum {
-				fmt.Printf("Received ack from: %s | seqNum: %d\n", targetElevator, ack.SeqNum)
+	go func() {
+		defer func() {
+			pendingAcksMutex.Lock()
+			delete(pendingAcks, hallCall.SeqNum)
+			pendingAcksMutex.Unlock()
+		}()	
+		for{
+			select{
+			case <- ackChan:
+				fmt.Printf("Received ack from: %s | seqNum: %d\n", targetElevator, hallCall.SeqNum)
 				return
+			case <-timeout:
+                fmt.Printf("Timeout reached for assignment to %s | SeqNum: %d\n", targetElevator, hallCall.SeqNum)
+				return
+			default:
+				fmt.Printf("Sending assignment to %s for floor %d\n", targetElevator, hallCall.Floor)
+				txAssignmentChan <- hallCall
+				time.Sleep(resendTimeout)
 			}
-		case <-timeout:
-			fmt.Println("Timeout reached, stopping attempts")
-			return
-		default:
-			fmt.Printf("Sending assignment to %s for floor %d\n", targetElevator, hallCall.Floor)
-			txAssignmentChan <- hallCall
-			time.Sleep(resendTimeout)
 		}
-	}
+	}()
 }
 
 // Sends a raw hall call event to the master elevator for assignment.
@@ -261,23 +285,35 @@ func SendRawHallCall(masterID string, hallCall elevio.ButtonEvent) {
     }
     seqNumRawCallCounter++
     msg := RawHallCallMessage{TargetID: masterID, SenderID: config.LocalID, Floor: hallCall.Floor, Button: hallCall.Button, SeqNum: seqNumRawCallCounter}
+	
+	ackChan := make(chan struct{})
+    pendingAcksMutex.Lock()
+    pendingAcks[msg.SeqNum] = ackChan
+    pendingAcksMutex.Unlock()
 	timeout := time.After(giveUpTimeout)
-	for{
-		select{
-		case ack := <- rxAckChan:
-			if ack.TargetID == config.LocalID && ack.SeqNum == msg.SeqNum {
-				fmt.Println("Received ack from master", masterID)
+	
+	go func() {
+		defer func() {
+			pendingAcksMutex.Lock()
+			delete(pendingAcks, msg.SeqNum)
+			pendingAcksMutex.Unlock()
+		}()
+
+		for{
+			select{
+			case <-ackChan:
+                fmt.Printf("Received ack from master %s | SeqNum: %d\n", masterID, msg.SeqNum)
 				return
+			case <-timeout:
+                fmt.Printf("Timeout reached for RawHallCall to master %s | SeqNum: %d\n", masterID, msg.SeqNum)
+				return
+			default:
+                fmt.Printf("Sending RawHallCall to master %s for floor %d | SeqNum: %d\n", masterID, hallCall.Floor, msg.SeqNum)
+				txRawHallCallChan <- msg
+				time.Sleep(resendTimeout)
 			}
-		case <-timeout:
-			fmt.Println("Timeout reached, stopping attempts")
-			return
-		default:
-			fmt.Printf("Sending RawHallCall to master %s for floor %d\n", masterID, hallCall.Floor)
-			txRawHallCallChan <- msg
-			time.Sleep(resendTimeout)
 		}
-	}
+	}()
 }
 
 // -----------------------------------------------------------------------------
@@ -297,23 +333,33 @@ func SendOrderStatus(msg OrderStatusMessage) {
 	SeqOrderStatusCounter++
 	msg.SeqNum = SeqOrderStatusCounter
 
+	ackChan := make(chan struct{})
+	pendingAcksMutex.Lock()
+	pendingAcks[msg.SeqNum] = ackChan
+	pendingAcksMutex.Unlock()
+	
 	timeout := time.After(giveUpTimeout)
-	for{
-		select{
-		case ack := <- rxAckChan:
-			if ack.SeqNum == msg.SeqNum {
-				fmt.Printf("Order status acknowledged by master | SeqNum: %d\n", ack.SeqNum)
+	go func() {
+		defer func() {
+			pendingAcksMutex.Lock()
+			delete(pendingAcks, msg.SeqNum)
+			pendingAcksMutex.Unlock()
+		}()
+		for{
+			select{
+			case <-ackChan:
+				fmt.Printf("Order status acknowledged by master | SeqNum: %d\n", msg.SeqNum)
 				return
+			case <-timeout:
+				fmt.Println("Timeout reached, stopping attempts")
+				return
+			default:
+				fmt.Printf("Sending order status: unfinished to master | SeqNum: %d\n", msg.SeqNum)
+				txOrderStatusChan <- msg
+				time.Sleep(resendTimeout)
 			}
-		case <-timeout:
-			fmt.Println("Timeout reached, stopping attempts")
-			return
-		default:
-			fmt.Printf("Sending order status: unfinished to master | SeqNum: %d\n", msg.SeqNum)
-			txOrderStatusChan <- msg
-			time.Sleep(resendTimeout)
 		}
-	}
+	}()
 }
 
 func SendLightOrder(buttonLight elevio.ButtonEvent, lightOnOrOff LightStatus) {
@@ -332,28 +378,34 @@ func SendLightOrder(buttonLight elevio.ButtonEvent, lightOnOrOff LightStatus) {
 			Light: lightOnOrOff,
 			SeqNum: seqLightCounter,
     	}
-		/*
+
+		ackChan := make(chan struct{})
+		pendingAcksMutex.Lock()
+		pendingAcks[msg.SeqNum] = ackChan
+		pendingAcksMutex.Unlock()
+		
 		timeout := time.After(giveUpTimeout)
-		for {
-			select {
-			case ack:= <-rxAckChan:
-				if ack.TargetID == msg.TargetID && ack.SeqNum == msg.SeqNum {
-					fmt.Printf("Light order acknowledged by %s | SeqNum: %d\n", elevator.ID, ack.SeqNum)
+		go func() {
+			defer func() {
+				pendingAcksMutex.Lock()
+				delete(pendingAcks, msg.SeqNum)
+				pendingAcksMutex.Unlock()
+			}()
+			for {
+				select {
+				case <-ackChan:
+					fmt.Printf("Light order acknowledged by %s | SeqNum: %d\n", elevator.ID, msg.SeqNum)
 					return
+				case <-timeout:
+					fmt.Println("Timeout reached, stopping attempts to set light")
+					return
+				default:
+					fmt.Printf("Sending light order to %s for floor %d | SeqNum: %d\n", elevator.ID, msg.ButtonEvent.Floor, msg.SeqNum)
+					txLightChan <- msg
+					time.Sleep(resendTimeout)
 				}
-			case <-timeout:
-				fmt.Println("Timeout reached, stopping attempts to set light")
-				return
-			default:
-				fmt.Printf("Sending light order to %s for floor %d | SeqNum: %d\n", elevator.ID, msg.ButtonEvent.Floor, msg.SeqNum)
-				*/
-				txLightChan <- msg
-				/*
-				time.Sleep(resendTimeout)
 			}
-		}
-		*/
+		}()
 	}
 }
 
-//PushTest!!

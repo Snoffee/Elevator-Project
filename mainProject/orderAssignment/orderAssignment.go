@@ -48,11 +48,11 @@ func RunOrderAssignment(elevatorStatusesChan chan map[string]network.ElevatorSta
 						assignedHallCallChan <- hallCall
 						fmt.Printf("Assigned hall call to local elevator at floor %d\n\n", hallCall.Floor)
 					} else {
-						network.SendAssignment(bestElevator, hallCall.Floor, hallCall.Button)
+						go network.SendAssignment(bestElevator, hallCall.Floor, hallCall.Button)
 						fmt.Printf("Sent hall assignment to elevator: %s\n\n", bestElevator)
 					}
 				} else {
-					network.SendRawHallCall(latestMasterID, hallCall)
+					go network.SendRawHallCall(latestMasterID, hallCall)
 					fmt.Printf("Forwarded hall call to master: %s\n\n", latestMasterID)
 				}
 			case status := <-orderStatusChan:
@@ -73,8 +73,8 @@ func RunOrderAssignment(elevatorStatusesChan chan map[string]network.ElevatorSta
 						fmt.Printf("Turned off order hall light for all elevators\n\n")
 					}
 				}
+			}
 		}
-	}
 	}()
 }
 

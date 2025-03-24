@@ -23,11 +23,12 @@ func main() {
 	hallCallChan         := make(chan elevio.ButtonEvent, 20)  // Send hall calls to order_assignment
 	orderStatusChan      := make(chan network.OrderStatusMessage, 20) // Send confirmation of hall calls
 	assignedHallCallChan := make(chan elevio.ButtonEvent, 20) // Receive assigned hall calls
+	txAckChan			 := make(chan network.AckMessage, 20)
 
 	//Missing ack channel ting og tang
 
 	// Start single_elevator
-	go singleElevator.RunSingleElevator(hallCallChan, assignedHallCallChan, orderStatusChan)
+	go singleElevator.RunSingleElevator(hallCallChan, assignedHallCallChan, orderStatusChan, txAckChan)
 
 	// Start Peer Monitoring
 	go peerMonitor.RunMonitorPeers(peerUpdatesChan, lostPeerChan, newPeerChan)
@@ -36,10 +37,10 @@ func main() {
 	go masterElection.RunMasterElection(elevatorStatusesChan, masterElectionChan)
 
 	// Start Network
-	go network.RunNetwork(elevatorStatusesChan, peerUpdatesChan, orderStatusChan)
+	go network.RunNetwork(elevatorStatusesChan, peerUpdatesChan, orderStatusChan, txAckChan)
 	
 	// Start Order Assignment
-	go orderAssignment.RunOrderAssignment(elevatorStatusesChan, masterElectionChan, lostPeerChan, newPeerChan, hallCallChan, assignedHallCallChan, orderStatusChan)
+	go orderAssignment.RunOrderAssignment(elevatorStatusesChan, masterElectionChan, lostPeerChan, newPeerChan, hallCallChan, assignedHallCallChan, orderStatusChan, txAckChan)
 
 	select{}
 

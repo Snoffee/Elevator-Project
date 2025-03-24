@@ -18,7 +18,7 @@ var (
 )
 
 // **Run Single Elevator Logic**
-func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage) {
+func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage, txAckChan chan network.AckMessage) {
 	
 	movementTimer.Stop()
 	obstructionTimer.Stop()
@@ -51,7 +51,6 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 	lightOrderChan := make(chan network.LightOrderMessage, 10)
 	go bcast.Receiver(30006, lightOrderChan) // lightPort
 
-	txAckChan := make(chan network.AckMessage, 10)
 	go bcast.Transmitter(30004, txAckChan) // ackPort
 
 
@@ -86,6 +85,10 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 				} else {
 					elevio.SetButtonLamp(lightOrder.ButtonEvent.Button, lightOrder.ButtonEvent.Floor, true)
 				}
+				/*
+				ackMsg := network.AckMessage{TargetID: lightOrder.TargetID, SeqNum: lightOrder.SeqNum}
+				txAckChan <- ackMsg
+				*/
 			}
 		case <- movementTimer.C:
 			//stop the elevator due to timeout

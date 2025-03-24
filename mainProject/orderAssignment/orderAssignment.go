@@ -9,7 +9,7 @@ import (
 )
 
 // **Run Order Assignment as a Goroutine**
-func RunOrderAssignment(elevatorStatusesChan chan map[string]network.ElevatorStatus, masterChan chan string, lostPeerChan chan string, newPeerChan chan string, hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage) {
+func RunOrderAssignment(elevatorStatusesChan chan map[string]network.ElevatorStatus, masterChan chan string, lostPeerChan chan string, newPeerChan chan string, hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage, txAckChan chan network.AckMessage) {
 
 	go func() {
 		var latestMasterID string
@@ -57,10 +57,10 @@ func RunOrderAssignment(elevatorStatusesChan chan map[string]network.ElevatorSta
 				}
 			case status := <-orderStatusChan:
 				if latestMasterID == config.LocalID {
-					for i:=1; i<4; i++{
-						ack := network.AckMessage{TargetID: status.SenderID, SeqNum: status.SeqNum}
-						txAckChan <- ack //missing correct chan
-					}
+					ackMsg := network.AckMessage{TargetID: status.SenderID, SeqNum: status.SeqNum}
+					fmt.Printf("Sending ack for orderStatus to sender: %s | SeqNum: %d\n\n", ackMsg.TargetID, ackMsg.SeqNum)
+					txAckChan <- ackMsg 
+					
 					if status.Status == network.Unfinished {
 						fmt.Printf("Received unfinished order status from elevator %s\n", status.SenderID)
 						network.SendLightOrder(status.ButtonEvent, network.On)

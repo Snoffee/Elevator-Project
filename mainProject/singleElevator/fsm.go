@@ -1,26 +1,22 @@
 package singleElevator
 
 import (
+	"fmt"
 	"mainProject/config"
 	"mainProject/elevio"
-	"time"
-	"fmt"
+	"mainProject/network"
 	"os"
+	"time"
 )
 
 var elevator config.Elevator
 
-// **Get the entire elevator state**
+// Get the entire elevator state
 func GetElevatorState() config.Elevator {
 	return elevator
 }
 
-// **Set the entire elevator state (for testing purposes)**
-func SetElevatorState(e config.Elevator) {
-	elevator = e
-}
-
-// **Initialize Elevator**
+// Initialize Elevator
 func InitElevator() {
 
 	elevator = config.Elevator{
@@ -53,6 +49,7 @@ func InitElevator() {
 		elevator.Floor = elevio.GetFloor()
 	}
 	elevio.SetFloorIndicator(elevator.Floor)
+	network.BroadcastElevatorStatus(GetElevatorState())
 	fmt.Printf("I'm starting at floor %v\n", elevator.Floor)
 
 	elevator.State = config.DoorOpen
@@ -63,7 +60,7 @@ func InitElevator() {
 	}
 }
 
-// **Handles state transitions**
+// Handles state transitions
 func HandleStateTransition() {
 	fmt.Printf("Handling state transition from %v\n", elevator.State)
 
@@ -101,8 +98,8 @@ func HandleStateTransition() {
 	}
 }
 
-// Variable to hold the forceShutdown function, allowing it to be mocked during testing
-var forceShutdown = func(reason string) {
+// Forcing shutdown when elevator is in a fault state
+func forceShutdown(reason string) {
 	fmt.Printf("Forcefully shutting down the system due to: %s\n", reason)
 	os.Exit(1)
 }

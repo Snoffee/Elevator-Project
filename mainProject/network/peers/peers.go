@@ -15,7 +15,8 @@ type PeerUpdate struct {
 }
 
 const interval = 15 * time.Millisecond
-const timeout = 500 * time.Millisecond
+const timeout = 2000 * time.Millisecond
+const maxMissedHeartbeats = 3                  // Require 3 consecutive misses before marking peer as lost
 
 func Transmitter(port int, id string, transmitEnable <-chan bool) {
 
@@ -39,6 +40,7 @@ func Receiver(port int, peerUpdateCh chan<- PeerUpdate) {
 	var buf [1024]byte
 	var p PeerUpdate
 	lastSeen := make(map[string]time.Time)
+	missedHeartbeats := make(map[string]int)    // Track missed heartbeats per peer
 
 	conn := conn.DialBroadcastUDP(port)
 
@@ -59,15 +61,21 @@ func Receiver(port int, peerUpdateCh chan<- PeerUpdate) {
 			}
 
 			lastSeen[id] = time.Now()
+			missedHeartbeats[id] = 0            // Reset missed heartbeat count when a message is received
+
 		}
 
 		// Removing dead connection
 		p.Lost = make([]string, 0)
-		for k, v := range lastSeen {
-			if time.Now().Sub(v) > timeout {
-				updated = true
-				p.Lost = append(p.Lost, k)
-				delete(lastSeen, k)
+		for k, lastTime := range lastSeen {
+			if time.Since(lastTime) > timeout {
+				missedHeartbeats[k]++
+                if missedHeartbeats[k] >= maxMissedHeartbeats {
+					updated = true
+					p.Lost = append(p.Lost, k)
+					delete(lastSeen, k)
+					delete(missedHeartbeats, k)
+				}
 			}
 		}
 
@@ -75,7 +83,7 @@ func Receiver(port int, peerUpdateCh chan<- PeerUpdate) {
 		if updated {
 			p.Peers = make([]string, 0, len(lastSeen))
 
-			for k, _ := range lastSeen {
+			for k := range lastSeen {
 				p.Peers = append(p.Peers, k)
 			}
 

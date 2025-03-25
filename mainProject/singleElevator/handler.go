@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// **Handles button press events**
+// Handles button press events
 func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage) {
 	fmt.Printf("Button pressed: %+v\n\n", event)
 	
@@ -20,8 +20,11 @@ func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.Butto
 		// If the elevator is already at the requested floor, process it immediately
 		if (elevator.Floor == event.Floor && floorSensorValue != -1){
 			fmt.Println("Cab call at current floor, processing immediately...")
+			go func() {
+				time.Sleep(2 * time.Second)  
+				ProcessFloorArrival(elevator.Floor, orderStatusChan)
+			}()
 			network.BroadcastElevatorStatus(GetElevatorState())
-			ProcessFloorArrival(elevator.Floor, orderStatusChan) 
 		} else {
 			HandleStateTransition() 
 		}
@@ -30,7 +33,7 @@ func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.Butto
 	}
 }
 
-// **Handles floor sensor events**
+// Handles floor sensor events
 func ProcessFloorArrival(floor int, orderStatusChan chan network.OrderStatusMessage) {
 	fmt.Printf("Floor sensor triggered: %+v\n", floor)
 	elevio.SetFloorIndicator(floor)
@@ -57,7 +60,7 @@ func ProcessFloorArrival(floor int, orderStatusChan chan network.OrderStatusMess
 	elevio.SetDoorOpenLamp(true)
 	doorTimer.Reset(config.DoorOpenTime * time.Second)
 
-	// **Clear Cab Call if it exists**
+	// Clear Cab Call if it exists
 	if hasCabCall {
 		elevio.SetButtonLamp(elevio.BT_Cab, floor, false)
 		elevator.Queue[floor][elevio.BT_Cab] = false
@@ -119,7 +122,7 @@ func ProcessFloorArrival(floor int, orderStatusChan chan network.OrderStatusMess
 	network.BroadcastElevatorStatus(elevator)
 }
 
-// **Handles obstruction events**
+// Handles obstruction events
 func ProcessObstruction(obstructed bool) {
 	elevator.Obstructed = obstructed
 
@@ -140,8 +143,7 @@ func ProcessObstruction(obstructed bool) {
 	}
 }
 
-// **Handles an assigned hall call from `order_assignment`**
-// If the best elevator is itself, the order gets sent here
+// Handles an assigned hall call from `order_assignment`
 func handleAssignedHallCall(order elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage){
 	fmt.Printf(" Received assigned hall call: Floor %d, Button %d\n\n", order.Floor, order.Button)
 
@@ -152,20 +154,22 @@ func handleAssignedHallCall(order elevio.ButtonEvent, orderStatusChan chan netwo
 		network.SeqOrderStatusCounter++
 		msg := network.OrderStatusMessage{ButtonEvent: order, SenderID: config.LocalID, Status: network.Unfinished, SeqNum: network.SeqOrderStatusCounter}
 		orderStatusChan <- msg
-		network.SendOrderStatus(msg)
+		go network.SendOrderStatus(msg)
 	}
 	floorSensorValue := elevio.GetFloor()
 	// If the elevator is already at the assigned floor, immediately process it
     if elevator.Floor == order.Floor && floorSensorValue != -1{
         fmt.Println("Already at assigned floor, processing immediately...")
-		ProcessFloorArrival(elevator.Floor, orderStatusChan)
-    } else {
+		go func() {
+			time.Sleep(2 * time.Second)  
+			ProcessFloorArrival(elevator.Floor, orderStatusChan)
+		}()  
         network.BroadcastElevatorStatus(GetElevatorState())
         HandleStateTransition()
     }
 }
 
-// **Handles an assigned raw hall call from the network**
+// Handles an assigned raw hall call from the network
 func handleAssignedRawHallCall(rawCall network.RawHallCallMessage, hallCallChan chan elevio.ButtonEvent, txAckChan chan network.AckMessage) {
     // Ignore calls not meant for this elevator
     if rawCall.TargetID != "" && rawCall.TargetID != config.LocalID {
@@ -179,8 +183,8 @@ func handleAssignedRawHallCall(rawCall network.RawHallCallMessage, hallCallChan 
 	
 }
 
-// **Receive Hall Assignments from Network**
-// If the best elevator was another elevator on the network the order gets sent here
+// Receive Hall Assignments from Network
+// If the best elevator was another elevator on the network the order gets sent here (master elevator)
 func handleAssignedNetworkHallCall(msg network.AssignmentMessage, orderStatusChan chan network.OrderStatusMessage, txAckChan chan network.AckMessage) {
 	if msg.TargetID == config.LocalID {
 		fmt.Printf("Received hall assignment for me from network: Floor %d, Button %v\n\n", msg.Floor, msg.Button)

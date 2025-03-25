@@ -28,8 +28,8 @@ const (
 	NumFloors  = 4
 	NumButtons = 3
 	DoorOpenTime = 3 // Seconds
-	NotMovingTimeLimit = 6 // Seconds
-	ObstructionTimeLimit = 8 // Seconds
+	NotMovingTimeLimit = 8 // Seconds
+	ObstructionTimeLimit = 4 // Seconds
 )
 
 var LocalID string

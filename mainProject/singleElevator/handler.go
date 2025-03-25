@@ -191,7 +191,7 @@ func handleAssignedNetworkHallCall(msg network.AssignmentMessage, orderStatusCha
 		fmt.Printf("Received hall assignment for me from network: Floor %d, Button %v\n\n", msg.Floor, msg.Button)
 		handleAssignedHallCall(elevio.ButtonEvent{Floor: msg.Floor, Button: msg.Button}, orderStatusChan)
 
-		ackMsg := network.AckMessage{TargetID: config.LocalID, SeqNum: msg.SeqNum}
+		ackMsg := network.AckMessage{TargetID: config.MasterID, SeqNum: msg.SeqNum}
 		txAckChan <- ackMsg
 		fmt.Printf("Broadcasting ack for assignment | SeqNum: %d\n\n", ackMsg.SeqNum)
 		

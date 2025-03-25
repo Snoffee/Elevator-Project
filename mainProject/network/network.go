@@ -8,6 +8,7 @@ import (
 	"mainProject/network/peers"
 	"sync"
 	"time"
+	"container/list"
 )
 
 const (
@@ -79,6 +80,11 @@ type LightOrderMessage struct {
 	SeqNum  	int
 }
 
+type RecentAcks struct {
+	m    map[int]*list.Element
+	list *list.List
+}
+
 // -----------------------------------------------------------------------------
 // Global Variables
 // -----------------------------------------------------------------------------
@@ -98,7 +104,7 @@ var (
 	resendTimeout			= 8 * time.Second
 	giveUpTimeout			= 10 * time.Second
 
-	seqNumAssignmentCounter = 0
+	seqNumAssignmentCounter = 20
 	seqNumRawCallCounter	= 100
 	SeqOrderStatusCounter   = 200
 	seqLightCounter         = 300
@@ -141,15 +147,22 @@ func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates ch
 	// Start broadcasting light orders
 	go bcast.Transmitter(lightPort, txLightChan)
 
+	recentAcks := NewRecentAcks()
+	for i := 0; i < 30; i++ {
+		recentAcks.Add(i) //dummy values to add "padding" to begin with
+	}
+
 	go func() {
 		for ack := range rxAckChan {
 			pendingAcksMutex.Lock()
-			if ackChan, exists := pendingAcks[ack.SeqNum]; exists && ack.TargetID == config.LocalID{
-				fmt.Printf("ACK received for SeqNum: %d from %s\n", ack.SeqNum, ack.TargetID)
+			if ackChan, exists := pendingAcks[ack.SeqNum]; exists && ack.TargetID == config.LocalID && !recentAcks.Exists(ack.SeqNum){
+				fmt.Printf("ACK received for SeqNum: %d, TargetID %s\n", ack.SeqNum, ack.TargetID)
 				close(ackChan)
 				delete(pendingAcks, ack.SeqNum)
+				recentAcks.Add(ack.SeqNum)
+				recentAcks.RemoveOldest()
 			} else {
-				fmt.Printf("Unexpected ACK received: SeqNum: %d from %s (Possibly already processed)\n", ack.SeqNum, ack.TargetID)
+				fmt.Printf("Unexpected ACK received: SeqNum: %d, TargetID %s (Possibly already processed)\n", ack.SeqNum, ack.TargetID)
 			}
 			pendingAcksMutex.Unlock()
 		}
@@ -264,13 +277,13 @@ func SendAssignment(targetElevator string, floor int, button elevio.ButtonType) 
 		for{
 			select{
 			case <- ackChan:
-				fmt.Printf("Received ack from: %s | seqNum: %d\n", targetElevator, hallCall.SeqNum)
+				fmt.Printf("Received ack for assignment from: %s | seqNum: %d\n", targetElevator, hallCall.SeqNum)
 				return
 			case <-timeout:
                 fmt.Printf("Timeout reached for assignment to %s | SeqNum: %d\n", targetElevator, hallCall.SeqNum)
 				return
 			default:
-				fmt.Printf("Sending assignment to %s for floor %d\n", targetElevator, hallCall.Floor)
+				fmt.Printf("Sending assignment to %s for floor %d | SeqNum: %d\n", targetElevator, hallCall.Floor, hallCall.SeqNum)
 				txAssignmentChan <- hallCall
 				time.Sleep(resendTimeout)
 			}
@@ -302,7 +315,7 @@ func SendRawHallCall(hallCall elevio.ButtonEvent) {
 		for{
 			select{
 			case <-ackChan:
-                fmt.Printf("Received ack from master %s | SeqNum: %d\n", config.MasterID, msg.SeqNum)
+                fmt.Printf("RawHallCall acknowledged by master master %s | SeqNum: %d\n", config.MasterID, msg.SeqNum)
 				return
 			case <-timeout:
                 fmt.Printf("Timeout reached for RawHallCall to master %s | SeqNum: %d\n", config.MasterID, msg.SeqNum)
@@ -412,3 +425,37 @@ func SendLightOrder(buttonLight elevio.ButtonEvent, lightOnOrOff LightStatus) {
 	}
 }
 
+func NewRecentAcks() *RecentAcks {
+	return &RecentAcks{
+		m:    make(map[int]*list.Element),
+		list: list.New(),
+	}
+}
+
+func (recAcks *RecentAcks) Add(value int) {
+	// If value already exists, you might choose to do nothing or update its position.
+	if _, exists := recAcks.m[value]; exists {
+		return
+	}
+	// Insert new value at the back of the list.
+	elem := recAcks.list.PushBack(value)
+	recAcks.m[value] = elem
+	fmt.Printf("Added new element: %d\n", value)
+}
+
+func (recAcks *RecentAcks) Exists(value int) bool {
+	_, exists := recAcks.m[value]
+	return exists
+}
+
+func (recAcks *RecentAcks) RemoveOldest() {
+	// Remove the front element (oldest).
+	front := recAcks.list.Front()
+	if front == nil {
+		return
+	}
+	value := front.Value.(int)
+	recAcks.list.Remove(front)
+	delete(recAcks.m, value)
+	fmt.Printf("Removed oldest element: %d\n", value)
+}

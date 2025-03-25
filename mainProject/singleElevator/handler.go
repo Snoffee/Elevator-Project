@@ -163,7 +163,8 @@ func handleAssignedHallCall(order elevio.ButtonEvent, orderStatusChan chan netwo
 		go func() {
 			time.Sleep(2 * time.Second)  
 			ProcessFloorArrival(elevator.Floor, orderStatusChan)
-		}()  
+		}() 
+		} else {
         network.BroadcastElevatorStatus(GetElevatorState())
         HandleStateTransition()
     }

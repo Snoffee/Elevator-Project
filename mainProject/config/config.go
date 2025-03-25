@@ -33,6 +33,7 @@ const (
 )
 
 var LocalID string
+var MasterID string
 
 // Initialize LocalID based on hostname
 func InitConfig() {

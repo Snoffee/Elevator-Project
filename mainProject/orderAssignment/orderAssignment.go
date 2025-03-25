@@ -12,7 +12,7 @@ import (
 func RunOrderAssignment(elevatorStatusesChan chan map[string]network.ElevatorStatus, masterChan chan string, lostPeerChan chan string, newPeerChan chan string, hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage, txAckChan chan network.AckMessage) {
 
 	go func() {
-		var latestMasterID string
+		//var latestMasterID string
 		var latestElevatorStatuses map[string]network.ElevatorStatus
 
 		for {
@@ -21,27 +21,27 @@ func RunOrderAssignment(elevatorStatusesChan chan map[string]network.ElevatorSta
 				latestElevatorStatuses = updatedStatuses 
 
 			case newMaster := <-masterChan:
-				latestMasterID = newMaster 
-				fmt.Printf("Updated Master ID: %s\n\n", latestMasterID)
+				config.MasterID = newMaster 
+				fmt.Printf("Updated Master ID: %s\n\n", config.MasterID)
 
 			case lostElevator := <-lostPeerChan:
-				if lostElevator == latestMasterID {
+				if lostElevator == config.MasterID {
 					fmt.Printf("Master elevator %s disconnected! Reassigning hall orders...\n\n", lostElevator)
 					masterElection.ElectMaster(latestElevatorStatuses, masterChan)
 					newMasterID := <-masterChan
-					latestMasterID = newMasterID
+					config.MasterID = newMasterID
 				}
-				if latestMasterID == config.LocalID && latestElevatorStatuses != nil {
+				if config.MasterID == config.LocalID && latestElevatorStatuses != nil {
 					fmt.Printf("Lost elevator detected: %s. Reassigning hall orders...\n\n", lostElevator)
 					ReassignLostHallOrders(lostElevator, latestElevatorStatuses, assignedHallCallChan)
 				}
 			case newElevator := <-newPeerChan:
-				if latestMasterID == config.LocalID && latestElevatorStatuses != nil {
+				if config.MasterID == config.LocalID && latestElevatorStatuses != nil {
 					fmt.Printf("New elevator detected: %s. Restoring cab calls...\n\n", newElevator)
 					ReassignCabCalls(newElevator)
 				}
 			case hallCall := <-hallCallChan: 
-				if latestMasterID == config.LocalID {
+				if config.MasterID == config.LocalID {
 					bestElevator := AssignHallOrder(hallCall.Floor, hallCall.Button, latestElevatorStatuses, "") // Passing "" on excludeElevator when normally calling AssignHallOrder		
 					
 					if bestElevator == config.LocalID {
@@ -52,11 +52,11 @@ func RunOrderAssignment(elevatorStatusesChan chan map[string]network.ElevatorSta
 						fmt.Printf("Sent hall assignment to elevator: %s\n\n", bestElevator)
 					}
 				} else {
-					go network.SendRawHallCall(latestMasterID, hallCall)
-					fmt.Printf("Forwarded hall call to master: %s\n\n", latestMasterID)
+					go network.SendRawHallCall(hallCall)
+					fmt.Printf("Forwarded hall call to master: %s\n\n", config.MasterID)
 				}
 			case status := <-orderStatusChan:
-				if latestMasterID == config.LocalID {
+				if config.MasterID == config.LocalID {
 					ackMsg := network.AckMessage{TargetID: status.SenderID, SeqNum: status.SeqNum}
 					fmt.Printf("Sending ack for orderStatus to sender: %s | SeqNum: %d\n\n", ackMsg.TargetID, ackMsg.SeqNum)
 					txAckChan <- ackMsg 

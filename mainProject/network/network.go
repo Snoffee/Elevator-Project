@@ -59,10 +59,10 @@ const (
 )
 
 type OrderStatusMessage struct {
-    SenderID   string
+    SenderID    string
     ButtonEvent elevio.ButtonEvent
-	Status     OrderStatus
-	SeqNum   int
+	Status      OrderStatus
+	SeqNum      int
 }
 
 type LightStatus int
@@ -75,8 +75,8 @@ const (
 type LightOrderMessage struct {
 	TargetID    string
 	ButtonEvent elevio.ButtonEvent
-	Light      LightStatus
-	SeqNum   int
+	Light       LightStatus
+	SeqNum  	int
 }
 
 // -----------------------------------------------------------------------------
@@ -144,7 +144,7 @@ func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates ch
 	go func() {
 		for ack := range rxAckChan {
 			pendingAcksMutex.Lock()
-			if ackChan, exists := pendingAcks[ack.SeqNum]; exists {
+			if ackChan, exists := pendingAcks[ack.SeqNum]; exists && ack.TargetID == config.LocalID{
 				fmt.Printf("ACK received for SeqNum: %d from %s\n", ack.SeqNum, ack.TargetID)
 				close(ackChan)
 				delete(pendingAcks, ack.SeqNum)
@@ -279,12 +279,12 @@ func SendAssignment(targetElevator string, floor int, button elevio.ButtonType) 
 }
 
 // Sends a raw hall call event to the master elevator for assignment.
-func SendRawHallCall(masterID string, hallCall elevio.ButtonEvent) {
-    if config.LocalID == masterID {
+func SendRawHallCall(hallCall elevio.ButtonEvent) {
+    if config.LocalID == config.MasterID {
         return
     }
     seqNumRawCallCounter++
-    msg := RawHallCallMessage{TargetID: masterID, SenderID: config.LocalID, Floor: hallCall.Floor, Button: hallCall.Button, SeqNum: seqNumRawCallCounter}
+    msg := RawHallCallMessage{TargetID: config.MasterID, SenderID: config.LocalID, Floor: hallCall.Floor, Button: hallCall.Button, SeqNum: seqNumRawCallCounter}
 	
 	ackChan := make(chan struct{})
     pendingAcksMutex.Lock()
@@ -302,13 +302,13 @@ func SendRawHallCall(masterID string, hallCall elevio.ButtonEvent) {
 		for{
 			select{
 			case <-ackChan:
-                fmt.Printf("Received ack from master %s | SeqNum: %d\n", masterID, msg.SeqNum)
+                fmt.Printf("Received ack from master %s | SeqNum: %d\n", config.MasterID, msg.SeqNum)
 				return
 			case <-timeout:
-                fmt.Printf("Timeout reached for RawHallCall to master %s | SeqNum: %d\n", masterID, msg.SeqNum)
+                fmt.Printf("Timeout reached for RawHallCall to master %s | SeqNum: %d\n", config.MasterID, msg.SeqNum)
 				return
 			default:
-                fmt.Printf("Sending RawHallCall to master %s for floor %d | SeqNum: %d\n", masterID, hallCall.Floor, msg.SeqNum)
+                fmt.Printf("Sending RawHallCall to master %s for floor %d | SeqNum: %d\n", config.MasterID, hallCall.Floor, msg.SeqNum)
 				txRawHallCallChan <- msg
 				time.Sleep(resendTimeout)
 			}
@@ -330,6 +330,9 @@ func startReceivingHallCallStatus(orderStatusChan chan OrderStatusMessage) {
 }
 
 func SendOrderStatus(msg OrderStatusMessage) {
+	if config.LocalID == config.MasterID {
+        return
+    }
 	SeqOrderStatusCounter++
 	msg.SeqNum = SeqOrderStatusCounter
 

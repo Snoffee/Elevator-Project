@@ -152,7 +152,7 @@ func handleAssignedHallCall(order elevio.ButtonEvent, orderStatusChan chan netwo
 
 	if order.Button != elevio.BT_Cab {
 		network.SeqOrderStatusCounter++
-		msg := network.OrderStatusMessage{ButtonEvent: order, SenderID: config.LocalID, Status: network.Unfinished, SeqNum: network.SeqOrderStatusCounter}
+		msg := network.OrderStatusMessage{ButtonEvent: order, SenderID: config.LocalID, Status: network.Unfinished}
 		orderStatusChan <- msg
 		go network.SendOrderStatus(msg)
 	}

@@ -85,9 +85,11 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 				} else {
 					elevio.SetButtonLamp(lightOrder.ButtonEvent.Button, lightOrder.ButtonEvent.Floor, true)
 				}
-				ackMsg := network.AckMessage{TargetID: lightOrder.TargetID, SeqNum: lightOrder.SeqNum}
-				txAckChan <- ackMsg
-				fmt.Printf("Sending ack for LightOrder to sender: %s | SeqNum: %d\n", ackMsg.TargetID, ackMsg.SeqNum)
+				if config.LocalID != config.MasterID {
+					ackMsg := network.AckMessage{TargetID: config.MasterID, SeqNum: lightOrder.SeqNum}
+					txAckChan <- ackMsg
+					fmt.Printf("Sending ack for LightOrder to master: %s | SeqNum: %d\n", config.MasterID, ackMsg.SeqNum)
+				}
 			}
 		case <- movementTimer.C:
 			//stop the elevator due to timeout

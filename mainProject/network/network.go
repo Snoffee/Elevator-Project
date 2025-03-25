@@ -264,13 +264,13 @@ func SendAssignment(targetElevator string, floor int, button elevio.ButtonType) 
 		for{
 			select{
 			case <- ackChan:
-				fmt.Printf("Received ack from: %s | seqNum: %d\n", targetElevator, hallCall.SeqNum)
+				fmt.Printf("Received ack for assignment from: %s | seqNum: %d\n", targetElevator, hallCall.SeqNum)
 				return
 			case <-timeout:
                 fmt.Printf("Timeout reached for assignment to %s | SeqNum: %d\n", targetElevator, hallCall.SeqNum)
 				return
 			default:
-				fmt.Printf("Sending assignment to %s for floor %d\n", targetElevator, hallCall.Floor)
+				fmt.Printf("Sending assignment to %s for floor %d | SeqNum: %d\n", targetElevator, hallCall.Floor, hallCall.SeqNum)
 				txAssignmentChan <- hallCall
 				time.Sleep(resendTimeout)
 			}
@@ -302,7 +302,7 @@ func SendRawHallCall(hallCall elevio.ButtonEvent) {
 		for{
 			select{
 			case <-ackChan:
-                fmt.Printf("Received ack from master %s | SeqNum: %d\n", config.MasterID, msg.SeqNum)
+                fmt.Printf("RawHallCall acknowledged by master master %s | SeqNum: %d\n", config.MasterID, msg.SeqNum)
 				return
 			case <-timeout:
                 fmt.Printf("Timeout reached for RawHallCall to master %s | SeqNum: %d\n", config.MasterID, msg.SeqNum)

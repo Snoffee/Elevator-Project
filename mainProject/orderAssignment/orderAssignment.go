@@ -58,8 +58,10 @@ func RunOrderAssignment(elevatorStatusesChan chan map[string]network.ElevatorSta
 			case status := <-orderStatusChan:
 				if config.MasterID == config.LocalID {
 					ackMsg := network.AckMessage{TargetID: status.SenderID, SeqNum: status.SeqNum}
-					fmt.Printf("Sending ack for orderStatus to sender: %s | SeqNum: %d\n\n", ackMsg.TargetID, ackMsg.SeqNum)
-					txAckChan <- ackMsg 
+					if status.SenderID != config.LocalID {
+						fmt.Printf("Sending ack for orderStatus to sender: %s | SeqNum: %d\n\n", ackMsg.TargetID, ackMsg.SeqNum)
+						txAckChan <- ackMsg
+					} 
 					
 					if status.Status == network.Unfinished {
 						fmt.Printf("Received unfinished order status from elevator %s\n", status.SenderID)

@@ -86,18 +86,15 @@ var (
 	elevatorStatuses        = make(map[string]ElevatorStatus) // Global map to track all known elevators
 	backupElevatorStatuses  = make(map[string]ElevatorStatus)
 	
-	txElevatorStatusChan    = make(chan ElevatorStatus, 10) // Global transmitter channel
-	rxElevatorStatusChan    = make(chan ElevatorStatus, 10) // Global receiver channel
-	txAssignmentChan        = make(chan AssignmentMessage, 10) // Global channel for assignments
-	txRawHallCallChan       = make(chan RawHallCallMessage, 10) // Slaves send hall call events to master
-	txLightChan	            = make(chan LightOrderMessage, 20) // transmit light orders
-	rxOrderStatusChan       = make(chan OrderStatusMessage, 10) // Receive confirmation of hall calls
-	txOrderStatusChan       = make(chan OrderStatusMessage, 10) // Transmit confirmation of hall calls
-	rxAckChan				= make(chan AckMessage, 10)
+	txElevatorStatusChan    = make(chan ElevatorStatus, 50) // Global transmitter channel
+	rxElevatorStatusChan    = make(chan ElevatorStatus, 50) // Global receiver channel
+	txAssignmentChan        = make(chan AssignmentMessage, 50) // Global channel for assignments
+	txRawHallCallChan       = make(chan RawHallCallMessage, 50) // Slaves send hall call events to master
+	txLightChan	            = make(chan LightOrderMessage, 50) // transmit light orders
+	rxOrderStatusChan       = make(chan OrderStatusMessage, 50) // Receive confirmation of hall calls
+	txOrderStatusChan       = make(chan OrderStatusMessage, 50) // Transmit confirmation of hall calls
+	rxAckChan				= make(chan AckMessage, 500)
 	
-	resendTimeout			= 8 * time.Second
-	giveUpTimeout			= 10 * time.Second
-
 	seqNumAssignmentCounter = 0
 	seqNumRawCallCounter	= 100
 	SeqOrderStatusCounter   = 200
@@ -106,6 +103,11 @@ var (
 	stateMutex	              sync.Mutex
 	pendingAcks   		    = make(map[int]chan struct{})
     pendingAcksMutex 		  sync.Mutex
+
+	MessageMaxRetries          = 5
+    MessageRedundancyFactor    = 3
+    MessageRetryInterval       = 200 * time.Millisecond
+    MessageExponentialBackoff  = 2
 )
 
 // -----------------------------------------------------------------------------
@@ -115,10 +117,10 @@ func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates ch
 	// Start peer reciver to get updates from other elevators
 	go peers.Receiver(peerPort, peerUpdates)
 
-	// Periodically send updated elevator states to other modules
-	startPeriodicStateUpdates(elevatorStateChan)
+	// Periodically send updated elevator status to other modules (locally)
+	startPeriodicLocalStatusUpdates(elevatorStateChan)
 	
-	// Start broadcasting elevator states
+	// Start broadcasting elevator status
 	go bcast.Transmitter(broadcastPort, txElevatorStatusChan)
 
 	// Start elevator status receiver
@@ -145,11 +147,11 @@ func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates ch
 		for ack := range rxAckChan {
 			pendingAcksMutex.Lock()
 			if ackChan, exists := pendingAcks[ack.SeqNum]; exists && ack.TargetID == config.LocalID{
-				fmt.Printf("ACK received for SeqNum: %d from %s\n", ack.SeqNum, ack.TargetID)
+				//fmt.Printf("ACK received for SeqNum: %d from %s\n", ack.SeqNum, ack.TargetID)
 				close(ackChan)
 				delete(pendingAcks, ack.SeqNum)
 			} else {
-				fmt.Printf("Unexpected ACK received: SeqNum: %d from %s (Possibly already processed)\n", ack.SeqNum, ack.TargetID)
+				//fmt.Printf("Unexpected ACK received: SeqNum: %d from %s (Possibly already processed)\n", ack.SeqNum, ack.TargetID)
 			}
 			pendingAcksMutex.Unlock()
 		}
@@ -159,7 +161,7 @@ func RunNetwork(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates ch
 // -----------------------------------------------------------------------------
 // Elevator State Management
 // -----------------------------------------------------------------------------
-// Updates the global elevatorStates map when new elevators join or existing elevators disconnect.
+// Updates the global elevatorStatuses map when new elevators join or existing elevators disconnect.
 // Backs up the state of lost elevators for potential reassignment of cab calls.
 func UpdateElevatorStates(newPeers []string, lostPeers []string) {
 	stateMutex.Lock()
@@ -167,13 +169,11 @@ func UpdateElevatorStates(newPeers []string, lostPeers []string) {
 
 	for _, lostPeer := range lostPeers {
 		if _, exists := elevatorStatuses[lostPeer]; exists {
-			fmt.Printf("Backing up lost elevator: %s\n\n", lostPeer)
 			backupElevatorStatuses[lostPeer] = elevatorStatuses[lostPeer]
 		}
 	}
 	for _, newPeer := range newPeers {
 		if _, exists := elevatorStatuses[newPeer]; !exists {
-			fmt.Printf("Adding new elevator %s to state map\n", newPeer)
 			elevatorStatuses[newPeer] = ElevatorStatus{
 				ID:        newPeer,
 				Timestamp: time.Now(),
@@ -181,7 +181,6 @@ func UpdateElevatorStates(newPeers []string, lostPeers []string) {
 		}
 	}
 	for _, lostPeer := range lostPeers {
-		fmt.Printf("Removing lost elevator %s from state map\n\n", lostPeer)
 		delete(elevatorStatuses, lostPeer)
 	}
 }
@@ -191,9 +190,8 @@ func GetBackupState() map[string]ElevatorStatus {
 	return backupElevatorStatuses
 }
 
-// Ensures that all modules periodically receive the latest state of all elevators.
-// Maintaining a consistent view of the system across all nodes, even if no immediate events occur.
-func startPeriodicStateUpdates(elevatorStatusesChan chan map[string]ElevatorStatus) {
+// Sends a copy of the current status map to the elevatorStatusesChan for internal use (e.g., order assignment, master election)
+func startPeriodicLocalStatusUpdates(elevatorStatusesChan chan map[string]ElevatorStatus) {
     go func() {
         for {
             stateMutex.Lock()
@@ -203,28 +201,37 @@ func startPeriodicStateUpdates(elevatorStatusesChan chan map[string]ElevatorStat
             }
             stateMutex.Unlock()
             elevatorStatusesChan <- copyMap 
-            time.Sleep(100 * time.Millisecond) 
+            time.Sleep(500 * time.Millisecond) 
         }
     }()
 }
 
-// Sends immediate updates when critical events happen (e.g., a floor is reached, a hall call is assigned).
-// Ensures that other modules or elevators are notified of state changes without waiting for the next periodic update.
-func BroadcastElevatorStatus(e config.Elevator) {
-	stateMutex.Lock()
-	status := ElevatorStatus{
-		ID:        config.LocalID,
-		Floor:     e.Floor,
-		Direction: e.State,
-		Queue:     e.Queue,
-		Timestamp: time.Now(),
-	}
-	stateMutex.Unlock()
+// Broadcasts local elevator state to other elevators and updates the global elevatorStatuses map
+// Sends immediate status updates when critical events happen (e.g., a floor is reached, a hall call is assigned).
+func BroadcastElevatorStatus(e config.Elevator, isCriticalEvent bool) {
+    stateMutex.Lock()
+    localElevatorStatus := ElevatorStatus{
+        ID:        config.LocalID,
+        Floor:     e.Floor,
+        Direction: e.State,
+        Queue:     e.Queue,
+        Timestamp: time.Now(),
+    }
+    elevatorStatuses[config.LocalID] = localElevatorStatus  // Always update the local map
+    stateMutex.Unlock()
 
-	txElevatorStatusChan <- status
+    redundancyFactor := 3  // For periodic broadcasts
+    if isCriticalEvent {
+        redundancyFactor = 10  // Increase redundancy for critical events
+    }
+
+    for i := 0; i < redundancyFactor; i++ {
+        txElevatorStatusChan <- localElevatorStatus
+        time.Sleep(5 * time.Millisecond)
+    }
 }
 
-// Receives elevator state updates from other elevators and updates the global elevatorStates map.
+// Receives elevator state updates from other elevators and updates the global elevatorStatuses map.
 func ReceiveElevatorStatus(rxElevatorStatusChan chan ElevatorStatus) {
 	go bcast.Receiver(broadcastPort, rxElevatorStatusChan)
 
@@ -247,73 +254,24 @@ func SendAssignment(targetElevator string, floor int, button elevio.ButtonType) 
 		TargetID: targetElevator,
 		Floor:    floor,
 		Button:   button,
-		SeqNum: seqNumAssignmentCounter,
+		SeqNum:   seqNumAssignmentCounter,
 	}
-	ackChan := make(chan struct{})
-	pendingAcksMutex.Lock()
-	pendingAcks[hallCall.SeqNum] = ackChan
-	pendingAcksMutex.Unlock()
-
-	timeout := time.After(giveUpTimeout)
-	go func() {
-		defer func() {
-			pendingAcksMutex.Lock()
-			delete(pendingAcks, hallCall.SeqNum)
-			pendingAcksMutex.Unlock()
-		}()	
-		for{
-			select{
-			case <- ackChan:
-				fmt.Printf("Received ack for assignment from: %s | seqNum: %d\n", targetElevator, hallCall.SeqNum)
-				return
-			case <-timeout:
-                fmt.Printf("Timeout reached for assignment to %s | SeqNum: %d\n", targetElevator, hallCall.SeqNum)
-				return
-			default:
-				fmt.Printf("Sending assignment to %s for floor %d | SeqNum: %d\n", targetElevator, hallCall.Floor, hallCall.SeqNum)
-				txAssignmentChan <- hallCall
-				time.Sleep(resendTimeout)
-			}
-		}
-	}()
+	go reliablePacketTransmit(hallCall, txAssignmentChan, hallCall.SeqNum, targetElevator, "Assignment Message", MessageRedundancyFactor)
 }
-
 // Sends a raw hall call event to the master elevator for assignment.
 func SendRawHallCall(hallCall elevio.ButtonEvent) {
     if config.LocalID == config.MasterID {
         return
     }
     seqNumRawCallCounter++
-    msg := RawHallCallMessage{TargetID: config.MasterID, SenderID: config.LocalID, Floor: hallCall.Floor, Button: hallCall.Button, SeqNum: seqNumRawCallCounter}
-	
-	ackChan := make(chan struct{})
-    pendingAcksMutex.Lock()
-    pendingAcks[msg.SeqNum] = ackChan
-    pendingAcksMutex.Unlock()
-	timeout := time.After(giveUpTimeout)
-	
-	go func() {
-		defer func() {
-			pendingAcksMutex.Lock()
-			delete(pendingAcks, msg.SeqNum)
-			pendingAcksMutex.Unlock()
-		}()
-
-		for{
-			select{
-			case <-ackChan:
-                fmt.Printf("RawHallCall acknowledged by master master %s | SeqNum: %d\n", config.MasterID, msg.SeqNum)
-				return
-			case <-timeout:
-                fmt.Printf("Timeout reached for RawHallCall to master %s | SeqNum: %d\n", config.MasterID, msg.SeqNum)
-				return
-			default:
-                fmt.Printf("Sending RawHallCall to master %s for floor %d | SeqNum: %d\n", config.MasterID, hallCall.Floor, msg.SeqNum)
-				txRawHallCallChan <- msg
-				time.Sleep(resendTimeout)
-			}
-		}
-	}()
+    msg := RawHallCallMessage{
+		TargetID: config.MasterID, 
+		SenderID: config.LocalID, 
+		Floor: 	  hallCall.Floor, 
+		Button:	  hallCall.Button, 
+		SeqNum:	  seqNumRawCallCounter,
+	}
+	go reliablePacketTransmit(msg, txRawHallCallChan, msg.SeqNum, config.MasterID, "Raw Hall Call", MessageRedundancyFactor)
 }
 
 // -----------------------------------------------------------------------------
@@ -330,85 +288,75 @@ func startReceivingHallCallStatus(orderStatusChan chan OrderStatusMessage) {
 }
 
 func SendOrderStatus(msg OrderStatusMessage) {
-	if config.LocalID == config.MasterID {
-        return
-    }
 	SeqOrderStatusCounter++
 	msg.SeqNum = SeqOrderStatusCounter
 
-	ackChan := make(chan struct{})
-	pendingAcksMutex.Lock()
-	pendingAcks[msg.SeqNum] = ackChan
-	pendingAcksMutex.Unlock()
-	
-	timeout := time.After(giveUpTimeout)
-	go func() {
-		defer func() {
-			pendingAcksMutex.Lock()
-			delete(pendingAcks, msg.SeqNum)
-			pendingAcksMutex.Unlock()
-		}()
-		for{
-			select{
-			case <-ackChan:
-				fmt.Printf("Order status acknowledged by master | SeqNum: %d\n", msg.SeqNum)
-				return
-			case <-timeout:
-				fmt.Println("Timeout reached, stopping attempts")
-				return
-			default:
-				fmt.Printf("Sending order status: unfinished to master | SeqNum: %d\n", msg.SeqNum)
-				txOrderStatusChan <- msg
-				time.Sleep(resendTimeout)
-			}
-		}
-	}()
+	var redundancyFactor int
+	if msg.Status == Finished {
+		redundancyFactor = MessageRedundancyFactor * 3  // Send Finished messages with higher redundancy
+	} else {
+		redundancyFactor = MessageRedundancyFactor
+	}
+	go reliablePacketTransmit(msg, txOrderStatusChan, msg.SeqNum, config.MasterID, "Order Status Message", redundancyFactor)
 }
 
-func SendLightOrder(buttonLight elevio.ButtonEvent, lightOnOrOff LightStatus) {
-	stateMutex.Lock()
-    defer stateMutex.Unlock()
-    
-	seqLightCounter++
-
+func SendLightOrder(buttonLight elevio.ButtonEvent, lightOnOrOff LightStatus, statusSenderID string) {
 	for _, elevator := range elevatorStatuses {
-		if elevator.ID == config.LocalID {
+		if elevator.ID == config.LocalID || elevator.ID == statusSenderID {
 			continue
 		}
-    	msg := LightOrderMessage{
-        	TargetID: elevator.ID,
-        	ButtonEvent: buttonLight,
-			Light: lightOnOrOff,
-			SeqNum: seqLightCounter,
-    	}
-
-		ackChan := make(chan struct{})
-		pendingAcksMutex.Lock()
-		pendingAcks[msg.SeqNum] = ackChan
-		pendingAcksMutex.Unlock()
-		
-		timeout := time.After(giveUpTimeout)
-		go func() {
-			defer func() {
-				pendingAcksMutex.Lock()
-				delete(pendingAcks, msg.SeqNum)
-				pendingAcksMutex.Unlock()
-			}()
-			for {
-				select {
-				case <-ackChan:
-					fmt.Printf("Light order acknowledged by %s | SeqNum: %d\n", elevator.ID, msg.SeqNum)
-					return
-				case <-timeout:
-					fmt.Println("Timeout reached, stopping attempts to set light")
-					return
-				default:
-					fmt.Printf("Sending light order to %s for floor %d | SeqNum: %d\n", elevator.ID, msg.ButtonEvent.Floor, msg.SeqNum)
-					txLightChan <- msg
-					time.Sleep(resendTimeout)
-				}
-			}
-		}()
+		seqLightCounter++
+		msg := LightOrderMessage{
+			TargetID:    elevator.ID,
+			ButtonEvent: buttonLight,
+			Light:       lightOnOrOff,
+			SeqNum:      seqLightCounter,
+		}
+		go reliablePacketTransmit(msg, txLightChan, msg.SeqNum, msg.TargetID, "Light Order", MessageRedundancyFactor)
 	}
+}
+
+// -----------------------------------------------------------------------------
+// Combined Message Handling
+// -----------------------------------------------------------------------------
+func reliablePacketTransmit(msg interface{}, txChan interface{}, seqNum int, targetID string, description string, redundancyFactor int) {
+    ackChan := make(chan struct{})
+    pendingAcksMutex.Lock()
+    pendingAcks[seqNum] = ackChan
+    pendingAcksMutex.Unlock()
+
+    retries := 0
+    currentInterval := MessageRetryInterval
+
+    for retries < MessageMaxRetries {
+        for i := 0; i < redundancyFactor; i++ {
+            switch ch := txChan.(type) { 
+            case chan AssignmentMessage:
+                ch <- msg.(AssignmentMessage)
+            case chan RawHallCallMessage:
+                ch <- msg.(RawHallCallMessage)
+            case chan OrderStatusMessage:
+                ch <- msg.(OrderStatusMessage)
+            case chan LightOrderMessage:
+                ch <- msg.(LightOrderMessage)
+            }
+        }
+
+        select {
+        case <-ackChan:
+			if targetID == config.LocalID {
+            	fmt.Printf("[ACK Received] %s | SeqNum: %d | Target: %s\n", description, seqNum, targetID)
+			}	
+            return
+        case <-time.After(currentInterval):
+            retries++
+            currentInterval *= time.Duration(MessageExponentialBackoff)
+            fmt.Printf("[Retrying] %s | SeqNum: %d | Attempt: %d/%d\n", description, seqNum, retries, MessageMaxRetries)
+        }
+    }
+    fmt.Printf("[Failed] %s | SeqNum: %d | Could not be delivered after %d attempts.\n", description, seqNum, MessageMaxRetries)
+    pendingAcksMutex.Lock()
+    delete(pendingAcks, seqNum)
+    pendingAcksMutex.Unlock()
 }
 

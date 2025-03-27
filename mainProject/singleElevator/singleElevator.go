@@ -10,14 +10,13 @@ import (
 )
 
 var (
-	movementTimer = time.NewTimer(20 * time.Second)
-	obstructionTimer = time.NewTimer(20 * time.Second)
-	doorTimer = time.NewTimer(config.DoorOpenTime * time.Second)
+	movementTimer				= time.NewTimer(20 * time.Second)
+	obstructionTimer 			= time.NewTimer(20 * time.Second)
+	doorTimer 					= time.NewTimer(config.DoorOpenTime * time.Second)
 	clearOppositeDirectionTimer = time.NewTimer(config.DoorOpenTime * time.Second)
-	delayedButtonEvent elevio.ButtonEvent // Store delayed call for later clearance
+	delayedButtonEvent 			  elevio.ButtonEvent // Store delayed call for later clearance
 )
 
-// **Run Single Elevator Logic**
 func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage, txAckChan chan network.AckMessage) {
 	
 	movementTimer.Stop()
@@ -37,70 +36,71 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 	go elevio.PollObstructionSwitch(obstructionSwitch)
 	
 
-	fmt.Println("Single Elevator Module Running...")
+	fmt.Printf("Single Elevator Module Running...\n\n")
 
 	// Start the receiver to listen for hall assignments
-	assignedNetworkHallCallChan := make(chan network.AssignmentMessage, 10) 
+	assignedNetworkHallCallChan := make(chan network.AssignmentMessage, 50) 
 	go bcast.Receiver(30002, assignedNetworkHallCallChan) // hallCallPort
 
 	// Create a channel to receive raw hall calls.
-	rawHallCallChan := make(chan network.RawHallCallMessage, 10)
+	rawHallCallChan := make(chan network.RawHallCallMessage, 50)
 	go bcast.Receiver(30003, rawHallCallChan) // rawHallCallPort
 
 	// Start the receiver to listen for light orders
-	lightOrderChan := make(chan network.LightOrderMessage, 10)
+	lightOrderChan := make(chan network.LightOrderMessage, 50)
 	go bcast.Receiver(30006, lightOrderChan) // lightPort
 
 	go bcast.Transmitter(30004, txAckChan) // ackPort
 
+	go flushRecentMessages()
 
+	// Periodic Broadcast - Continuously broadcasts the elevator status to other elevators
+    go func() {
+        for {
+            time.Sleep(1 * time.Second) 
+            network.BroadcastElevatorStatus(GetElevatorState(), false)
+        }
+    }()
 
 	// Event Loop
 	for {
-		// Prioritize floor sensor events
+		// Hardware
 		select {
 		case floorEvent := <-floorSensor:
 			ProcessFloorArrival(floorEvent, orderStatusChan) 
 		
 		case buttonEvent := <-buttonPress:
-			ProcessButtonPress(buttonEvent, hallCallChan, orderStatusChan) // Handle button press event
+			ProcessButtonPress(buttonEvent, hallCallChan, orderStatusChan) 
 
 		case obstructionEvent := <-obstructionSwitch:
-			ProcessObstruction(obstructionEvent) // Handle obstruction event
+			ProcessObstruction(obstructionEvent) 
 		
 		// Hall calls
 		case assignedOrder := <-assignedHallCallChan:
-			handleAssignedHallCall(assignedOrder, orderStatusChan) // Handle local assigned hall call
+			handleAssignedHallCall(assignedOrder, orderStatusChan) 
 		
 		case rawCall := <-rawHallCallChan:
-			handleAssignedRawHallCall(rawCall, hallCallChan, txAckChan) // Handle global assigned hall call
+			handleAssignedRawHallCall(rawCall, hallCallChan, txAckChan) 
 		
 		case networkAssignedOrder := <-assignedNetworkHallCallChan:
-			handleAssignedNetworkHallCall(networkAssignedOrder, orderStatusChan, txAckChan) // Handle network assigned hall call
-
+			handleAssignedNetworkHallCall(networkAssignedOrder, orderStatusChan, txAckChan) 
+		
+		// Light orders
 		case lightOrder := <-lightOrderChan:
-			if lightOrder.TargetID == config.LocalID {
-				if lightOrder.Light == network.Off {
-					elevio.SetButtonLamp(lightOrder.ButtonEvent.Button, lightOrder.ButtonEvent.Floor, false)
-				} else {
-					elevio.SetButtonLamp(lightOrder.ButtonEvent.Button, lightOrder.ButtonEvent.Floor, true)
-				}
-				if config.LocalID != config.MasterID {
-					ackMsg := network.AckMessage{TargetID: config.MasterID, SeqNum: lightOrder.SeqNum}
-					txAckChan <- ackMsg
-					fmt.Printf("Sending ack for LightOrder to master: %s | SeqNum: %d\n", config.MasterID, ackMsg.SeqNum)
-				}
-			}
+			handleLightOrder(lightOrder, txAckChan)
+		
+		// Order status
+		case status := <- orderStatusChan:
+			handleOrderStatus(status, txAckChan)
+
+		// Timers
 		case <- movementTimer.C:
-			//stop the elevator due to timeout
 			forceShutdown("power loss")
 
 		case <- obstructionTimer.C:
-			//stop the elevator due to timeout
 			forceShutdown("obstructed too long")
 		
 		case <- doorTimer.C:
-			//close the door
 			if !elevator.Obstructed {
 				fmt.Println("Transitioning from DoorOpen to Idle...")
 				elevio.SetDoorOpenLamp(false)
@@ -109,16 +109,16 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 			}else{
 				HandleStateTransition()
 			}
+
 		case <- clearOppositeDirectionTimer.C:
-			//clear the opposite direction
 			fmt.Printf("Clearing delayed opposite direction call: Floor %d, Button %v\n", delayedButtonEvent.Floor, delayedButtonEvent.Button)
 			elevio.SetButtonLamp(delayedButtonEvent.Button, delayedButtonEvent.Floor, false)
 			elevator.Queue[delayedButtonEvent.Floor][delayedButtonEvent.Button] = false
 			msg := network.OrderStatusMessage{ButtonEvent: delayedButtonEvent, SenderID: config.LocalID, Status: network.Finished}
 			orderStatusChan <- msg
 			network.SendOrderStatus(msg)
+			MarkAssignmentAsCompleted(msg.SeqNum)
 		}
-		network.BroadcastElevatorStatus(GetElevatorState())
-		//time.Sleep(100 * time.Millisecond)
+		network.BroadcastElevatorStatus(GetElevatorState(), true)
 	}
 }

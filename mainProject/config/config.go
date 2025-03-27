@@ -30,6 +30,7 @@ const (
 	DoorOpenTime = 3 // Seconds
 	NotMovingTimeLimit = 8 // Seconds
 	ObstructionTimeLimit = 4 // Seconds
+	MessageTimeout = 10 * time.Second
 )
 
 var LocalID string
@@ -37,8 +38,6 @@ var MasterID string
 
 // Initialize LocalID based on hostname
 func InitConfig() {
-	fmt.Println("Initializing connection to simulator/elevator...")
-
 	port := os.Getenv("ELEVATOR_PORT")
 	if port == "" {
     	port = "15657" // Default

@@ -8,11 +8,10 @@ import (
 	"fmt"
 )
 
-// **Run Order Assignment as a Goroutine**
+// Run Order Assignment as a Goroutine
 func RunOrderAssignment(elevatorStatusesChan chan map[string]network.ElevatorStatus, masterChan chan string, lostPeerChan chan string, newPeerChan chan string, hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage, txAckChan chan network.AckMessage) {
 
 	go func() {
-		//var latestMasterID string
 		var latestElevatorStatuses map[string]network.ElevatorStatus
 
 		for {
@@ -22,22 +21,18 @@ func RunOrderAssignment(elevatorStatusesChan chan map[string]network.ElevatorSta
 
 			case newMaster := <-masterChan:
 				config.MasterID = newMaster 
-				fmt.Printf("Updated Master ID: %s\n\n", config.MasterID)
 
 			case lostElevator := <-lostPeerChan:
 				if lostElevator == config.MasterID {
-					fmt.Printf("Master elevator %s disconnected! Reassigning hall orders...\n\n", lostElevator)
 					masterElection.ElectMaster(latestElevatorStatuses, masterChan)
 					newMasterID := <-masterChan
 					config.MasterID = newMasterID
 				}
 				if config.MasterID == config.LocalID && latestElevatorStatuses != nil {
-					fmt.Printf("Lost elevator detected: %s. Reassigning hall orders...\n\n", lostElevator)
 					ReassignLostHallOrders(lostElevator, latestElevatorStatuses, assignedHallCallChan)
 				}
 			case newElevator := <-newPeerChan:
 				if config.MasterID == config.LocalID && latestElevatorStatuses != nil {
-					fmt.Printf("New elevator detected: %s. Restoring cab calls...\n\n", newElevator)
 					ReassignCabCalls(newElevator)
 				}
 			case hallCall := <-hallCallChan: 
@@ -55,36 +50,15 @@ func RunOrderAssignment(elevatorStatusesChan chan map[string]network.ElevatorSta
 					go network.SendRawHallCall(hallCall)
 					fmt.Printf("Forwarded hall call to master: %s\n\n", config.MasterID)
 				}
-			case status := <-orderStatusChan:
-				if config.MasterID == config.LocalID {
-					ackMsg := network.AckMessage{TargetID: status.SenderID, SeqNum: status.SeqNum}
-					if status.SenderID != config.LocalID {
-						fmt.Printf("Sending ack for orderStatus to sender: %s | SeqNum: %d\n\n", ackMsg.TargetID, ackMsg.SeqNum)
-						txAckChan <- ackMsg
-					} 
-					
-					if status.Status == network.Unfinished {
-						fmt.Printf("Received unfinished order status from elevator %s\n", status.SenderID)
-						network.SendLightOrder(status.ButtonEvent, network.On)
-						elevio.SetButtonLamp(status.ButtonEvent.Button, status.ButtonEvent.Floor, true)
-						fmt.Printf("Turned on order hall light for all elevators\n\n")
-					} else {
-						network.SendLightOrder(status.ButtonEvent, network.Off)
-						fmt.Printf("Received finished order status from elevator %s\n", status.SenderID)
-						elevio.SetButtonLamp(status.ButtonEvent.Button, status.ButtonEvent.Floor, false)
-						fmt.Printf("Turned off order hall light for all elevators\n\n")
-					}
-				}
 			}
 		}
 	}()
 }
 
-// **Reassign hall orders if an elevator disconnects**
+// Reassign hall orders if an elevator disconnects
 func ReassignLostHallOrders(lostElevator string, elevatorStatuses map[string]network.ElevatorStatus, assignedHallCallChan chan elevio.ButtonEvent) {
 	state, exists := elevatorStatuses[lostElevator];
 	if !exists {
-		fmt.Printf("Lost elevator %s not found in state map!\n", lostElevator)
 		return
 	}
 	fmt.Printf("Reassigning hall calls from elevator %s...\n", lostElevator)
@@ -105,15 +79,13 @@ func ReassignLostHallOrders(lostElevator string, elevatorStatuses map[string]net
 	}
 }
 
-// **Send cab calls back to a recovering elevator**
+// Send cab calls back to a recovering elevator
 func ReassignCabCalls(recoveredElevator string) {
 	backupElevatorStates := network.GetBackupState()
 	state, exists := backupElevatorStates[recoveredElevator]; 
 	if !exists {
-		fmt.Printf("Recovered elevator %s not found in state map!\n", recoveredElevator)
 		return
-	} 
-	
+	} 	
 	fmt.Printf("Restoring state: %v\n", state.Queue)
 
 	for floor := 0; floor < config.NumFloors; floor++ {
@@ -124,7 +96,7 @@ func ReassignCabCalls(recoveredElevator string) {
 	}
 }
 
-// **Assign hall order to the closest available elevator**
+// Assign hall order to the closest available elevator
 func AssignHallOrder(floor int, button elevio.ButtonType, elevatorStatuses map[string]network.ElevatorStatus, excludeElevator string) string {
 	fmt.Printf("Available elevators: %v\n\n", elevatorStatuses)
 	bestElevator := ""
@@ -146,7 +118,7 @@ func AssignHallOrder(floor int, button elevio.ButtonType, elevatorStatuses map[s
 	return bestElevator
 }
 
-// **Helper function to calculate absolute distance**
+// Helper function to calculate absolute distance
 func abs(a int) int {
 	if a < 0 {
 		return -a

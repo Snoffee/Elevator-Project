@@ -41,6 +41,7 @@ func RunOrderAssignment(elevatorStatusesChan chan map[string]communication.Eleva
 					}
 				}
 			case newElevator := <-newPeerChan:
+				masterElection.RunMasterElection(elevatorStatusesChan, masterChan)
 				if config.MasterID == config.LocalID && latestElevatorStatuses != nil {
 					backupStates := communication.GetBackupState()
 					reassignCabCalls := getReassignedCabCalls(newElevator, backupStates)

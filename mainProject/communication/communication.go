@@ -88,11 +88,11 @@ var (
 	
 	txElevatorStatusChan    = make(chan ElevatorStatus, 50) // Global transmitter channel
 	rxElevatorStatusChan    = make(chan ElevatorStatus, 50) // Global receiver channel
-	txAssignmentChan        = make(chan AssignmentMessage, 50) // Global channel for assignments
-	txRawHallCallChan       = make(chan RawHallCallMessage, 50) // Slaves send hall call events to master
+	txAssignmentChan        = make(chan AssignmentMessage, 100) // Global channel for assignments
+	txRawHallCallChan       = make(chan RawHallCallMessage, 100) // Slaves send hall call events to master
 	txLightChan	            = make(chan LightOrderMessage, 50) // transmit light orders
-	rxOrderStatusChan       = make(chan OrderStatusMessage, 50) // Receive confirmation of hall calls
-	txOrderStatusChan       = make(chan OrderStatusMessage, 50) // Transmit confirmation of hall calls
+	rxOrderStatusChan       = make(chan OrderStatusMessage, 100) // Receive confirmation of hall calls
+	txOrderStatusChan       = make(chan OrderStatusMessage, 100) // Transmit confirmation of hall calls
 	rxAckChan				= make(chan AckMessage, 500)
 	
 	seqNumAssignmentCounter = 0
@@ -105,7 +105,7 @@ var (
     pendingAcksMutex 		  sync.Mutex
 
 	MessageMaxRetries          = 5
-    MessageRedundancyFactor    = 3
+    MessageRedundancyFactor    = 4
     MessageRetryInterval       = 200 * time.Millisecond
     MessageExponentialBackoff  = 2
 )
@@ -113,18 +113,16 @@ var (
 // -----------------------------------------------------------------------------
 // Initialization and Network Management
 // -----------------------------------------------------------------------------
-func RunCommunication(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates chan peers.PeerUpdate, orderStatusChan chan OrderStatusMessage, txAckChan chan AckMessage) {
+func RunCommunication(elevatorStateChan chan map[string]ElevatorStatus, peerUpdates chan peers.PeerUpdate, orderStatusChan chan OrderStatusMessage, txAckChan chan AckMessage, localStatusUpdateChan chan config.Elevator) {
 	// Start peer reciver to get updates from other elevators
 	go peers.Receiver(peerPort, peerUpdates)
 
 	// Periodically send updated elevator status to other modules (locally)
 	startPeriodicLocalStatusUpdates(elevatorStateChan)
-	
-	// Start broadcasting elevator status
-	go bcast.Transmitter(broadcastPort, txElevatorStatusChan)
 
-	// Start elevator status receiver
-	go ReceiveElevatorStatus(rxElevatorStatusChan)
+	// Start broadcasting and receiving elevator status
+	go bcast.Transmitter(broadcastPort, txElevatorStatusChan)
+	go bcast.Receiver(broadcastPort, rxElevatorStatusChan)
 
 	// Start broadcasting assignments
 	go bcast.Transmitter(assignmentPort, txAssignmentChan)
@@ -136,24 +134,36 @@ func RunCommunication(elevatorStateChan chan map[string]ElevatorStatus, peerUpda
 	go bcast.Receiver(ackPort, rxAckChan)
 	go bcast.Transmitter(ackPort, txAckChan)
 	
-	// Hall call status
-	go bcast.Transmitter(statusPort, txOrderStatusChan)
-	startReceivingHallCallStatus(orderStatusChan)
-	
+	// Start receiving and transmitting order status
+	go bcast.Transmitter(statusPort, txOrderStatusChan)	
+	go bcast.Receiver(statusPort, rxOrderStatusChan)
+
 	// Start broadcasting light orders
 	go bcast.Transmitter(lightPort, txLightChan)
 
 	go func() {
-		for ack := range rxAckChan {
-			pendingAcksMutex.Lock()
-			if ackChan, exists := pendingAcks[ack.SeqNum]; exists && ack.TargetID == config.LocalID{
-				//fmt.Printf("ACK received for SeqNum: %d from %s\n", ack.SeqNum, ack.TargetID)
-				close(ackChan)
-				delete(pendingAcks, ack.SeqNum)
-			} else {
-				//fmt.Printf("Unexpected ACK received: SeqNum: %d from %s (Possibly already processed)\n", ack.SeqNum, ack.TargetID)
+		for {
+			select{ 
+			case newState := <- localStatusUpdateChan:
+				BroadcastElevatorStatus(newState, true)
+
+			case ack := <- rxAckChan:
+				pendingAcksMutex.Lock()
+				//fmt.Printf("Sequence number: %d, Traget id: %s \n", ack.SeqNum, ack.TargetID)
+				if ackChan, exists := pendingAcks[ack.SeqNum]; exists {
+					close(ackChan)
+					delete(pendingAcks, ack.SeqNum)
+				} 
+				pendingAcksMutex.Unlock()
+
+			case orderStatus := <-rxOrderStatusChan:
+				orderStatusChan <- orderStatus
+			
+			case hallAssignment := <-rxElevatorStatusChan: // Handling incoming elevator statuses directly
+				stateMutex.Lock()
+				elevatorStatuses[hallAssignment.ID] = hallAssignment
+				stateMutex.Unlock()
 			}
-			pendingAcksMutex.Unlock()
 		}
-	}()
+	}()	
 }

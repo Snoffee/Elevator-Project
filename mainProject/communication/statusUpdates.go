@@ -2,7 +2,6 @@ package communication
 
 import (
 	"mainProject/config"
-	"mainProject/network/bcast"
 	"time"
 )
 
@@ -76,17 +75,4 @@ func BroadcastElevatorStatus(e config.Elevator, isCriticalEvent bool) {
         txElevatorStatusChan <- localElevatorStatus
         time.Sleep(5 * time.Millisecond)
     }
-}
-
-// Receives elevator state updates from other elevators and updates the global elevatorStatuses map.
-func ReceiveElevatorStatus(rxElevatorStatusChan chan ElevatorStatus) {
-	go bcast.Receiver(broadcastPort, rxElevatorStatusChan)
-
-	for {
-		hallAssignment := <-rxElevatorStatusChan
-
-		stateMutex.Lock()
-		elevatorStatuses[hallAssignment.ID] = hallAssignment
-		stateMutex.Unlock()
-	}
 }

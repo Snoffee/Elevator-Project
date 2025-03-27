@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"mainProject/config"
 	"mainProject/elevio"
-	"mainProject/network/bcast"
 	"time"
 )
 
@@ -41,23 +40,13 @@ func SendRawHallCall(hallCall elevio.ButtonEvent) {
 // -----------------------------------------------------------------------------
 // Light and Order Status Management
 // -----------------------------------------------------------------------------
-func startReceivingHallCallStatus(orderStatusChan chan OrderStatusMessage) {
-    go func() {
-        for {
-            msg := <-rxOrderStatusChan
-            orderStatusChan <- msg
-        }
-    }()
-    go bcast.Receiver(statusPort, rxOrderStatusChan)
-}
-
 func SendOrderStatus(msg OrderStatusMessage) {
 	SeqOrderStatusCounter++
 	msg.SeqNum = SeqOrderStatusCounter
 
 	var redundancyFactor int
 	if msg.Status == Finished {
-		redundancyFactor = MessageRedundancyFactor * 3  // Send Finished messages with higher redundancy
+		redundancyFactor = MessageRedundancyFactor   // Send Finished messages with higher redundancy
 	} else {
 		redundancyFactor = MessageRedundancyFactor
 	}
@@ -108,10 +97,8 @@ func reliablePacketTransmit(msg interface{}, txChan interface{}, seqNum int, tar
 
         select {
         case <-ackChan:
-			if targetID == config.LocalID {
-            	fmt.Printf("[ACK Received] %s | SeqNum: %d | Target: %s\n", description, seqNum, targetID)
-			}	
-            return
+            fmt.Printf("[ACK Received] %s | SeqNum: %d | Target: %s\n", description, seqNum, targetID)
+			return
         case <-time.After(currentInterval):
             retries++
             currentInterval *= time.Duration(MessageExponentialBackoff)

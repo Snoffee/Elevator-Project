@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"mainProject/config"
 	"mainProject/elevio"
-	"mainProject/network"
+	"mainProject/communication"
 	"os"
 	"time"
 )
@@ -49,7 +49,7 @@ func InitElevator() {
 		elevator.Floor = elevio.GetFloor()
 	}
 	elevio.SetFloorIndicator(elevator.Floor)
-	network.BroadcastElevatorStatus(GetElevatorState(), true)
+	communication.BroadcastElevatorStatus(GetElevatorState(), true)
 	fmt.Printf("I'm starting at floor %v\n", elevator.Floor)
 
 	elevator.State = config.DoorOpen

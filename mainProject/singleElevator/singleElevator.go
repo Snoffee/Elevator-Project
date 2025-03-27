@@ -2,7 +2,7 @@ package singleElevator
 
 import (
 	"mainProject/elevio"
-	"mainProject/network"
+	"mainProject/communication"
 	"mainProject/network/bcast"
 	"mainProject/config"
 	"fmt"
@@ -17,7 +17,7 @@ var (
 	delayedButtonEvent 			  elevio.ButtonEvent // Store delayed call for later clearance
 )
 
-func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan network.OrderStatusMessage, txAckChan chan network.AckMessage) {
+func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan communication.OrderStatusMessage, txAckChan chan communication.AckMessage) {
 	
 	movementTimer.Stop()
 	obstructionTimer.Stop()
@@ -38,18 +38,17 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 
 	fmt.Printf("Single Elevator Module Running...\n\n")
 
-	// Start the receiver to listen for hall assignments
-	assignedNetworkHallCallChan := make(chan network.AssignmentMessage, 50) 
+	//Start receivers for hall assignments, hall calls and light orders
+	assignedNetworkHallCallChan := make(chan communication.AssignmentMessage, 50) 
 	go bcast.Receiver(30002, assignedNetworkHallCallChan) // hallCallPort
 
-	// Create a channel to receive raw hall calls.
-	rawHallCallChan := make(chan network.RawHallCallMessage, 50)
+	rawHallCallChan := make(chan communication.RawHallCallMessage, 50)
 	go bcast.Receiver(30003, rawHallCallChan) // rawHallCallPort
 
-	// Start the receiver to listen for light orders
-	lightOrderChan := make(chan network.LightOrderMessage, 50)
+	lightOrderChan := make(chan communication.LightOrderMessage, 50)
 	go bcast.Receiver(30006, lightOrderChan) // lightPort
 
+	//Start Transmitter for acks
 	go bcast.Transmitter(30004, txAckChan) // ackPort
 
 	go flushRecentMessages()
@@ -58,7 +57,7 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
     go func() {
         for {
             time.Sleep(1 * time.Second) 
-            network.BroadcastElevatorStatus(GetElevatorState(), false)
+            communication.BroadcastElevatorStatus(GetElevatorState(), false)
         }
     }()
 
@@ -114,11 +113,11 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 			fmt.Printf("Clearing delayed opposite direction call: Floor %d, Button %v\n", delayedButtonEvent.Floor, delayedButtonEvent.Button)
 			elevio.SetButtonLamp(delayedButtonEvent.Button, delayedButtonEvent.Floor, false)
 			elevator.Queue[delayedButtonEvent.Floor][delayedButtonEvent.Button] = false
-			msg := network.OrderStatusMessage{ButtonEvent: delayedButtonEvent, SenderID: config.LocalID, Status: network.Finished}
+			msg := communication.OrderStatusMessage{ButtonEvent: delayedButtonEvent, SenderID: config.LocalID, Status: communication.Finished}
 			orderStatusChan <- msg
-			network.SendOrderStatus(msg)
+			communication.SendOrderStatus(msg)
 			MarkAssignmentAsCompleted(msg.SeqNum)
 		}
-		network.BroadcastElevatorStatus(GetElevatorState(), true)
+		communication.BroadcastElevatorStatus(GetElevatorState(), true)
 	}
 }

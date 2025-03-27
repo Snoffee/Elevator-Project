@@ -2,7 +2,7 @@ package masterElection
 
 import (
 	"mainProject/config"
-	"mainProject/network"
+	"mainProject/communication"
 	"fmt"
 	"sync"
 )
@@ -13,7 +13,7 @@ var (
 )
 
 // Runs Master Election and Listens for Updates
-func RunMasterElection(elevatorStateChan chan map[string]network.ElevatorStatus, masterChan chan string) {
+func RunMasterElection(elevatorStateChan chan map[string]communication.ElevatorStatus, masterChan chan string) {
 	go func() {
 		for elevatorStates := range elevatorStateChan {
 			ElectMaster(elevatorStates, masterChan)
@@ -22,7 +22,7 @@ func RunMasterElection(elevatorStateChan chan map[string]network.ElevatorStatus,
 }
 
 // Elect Master: Assign the lowest ID as master
-func ElectMaster(elevatorStates map[string]network.ElevatorStatus, masterChan chan string) {
+func ElectMaster(elevatorStates map[string]communication.ElevatorStatus, masterChan chan string) {
 	stateMutex.Lock()
 	defer stateMutex.Unlock()
 

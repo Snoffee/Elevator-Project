@@ -3,7 +3,7 @@ package peerMonitor
 import (
 	"fmt"
 	"mainProject/config"
-	"mainProject/network"
+	"mainProject/communication"
 	"mainProject/network/peers"
 	"mainProject/singleElevator"
 )
@@ -22,14 +22,14 @@ func RunMonitorPeers(peerUpdateChan chan peers.PeerUpdate, lostPeerChan chan str
 func monitorPeers(peerUpdateChan chan peers.PeerUpdate, lostPeerChan chan string, newPeerChan chan string) {
 	for update := range peerUpdateChan {
 		fmt.Printf("Received peer update: New=%v, Lost=%v\n", update.New, update.Lost)
-		network.UpdateElevatorStates(update.New, update.Lost)
+		communication.UpdateElevatorStates(update.New, update.Lost)
 
 		for _, lostPeer := range update.Lost {
 			lostPeerChan <- lostPeer
 		}
 		for _, newPeer := range update.New {
 			newPeerChan <- newPeer
-			network.BroadcastElevatorStatus(singleElevator.GetElevatorState(), true)
+			communication.BroadcastElevatorStatus(singleElevator.GetElevatorState(), true)
 		}
 	}
 }

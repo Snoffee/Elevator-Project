@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"mainProject/config"
 	"mainProject/elevio"
-	"mainProject/communication"
 	"os"
 	"time"
 )
@@ -17,7 +16,7 @@ func GetElevatorState() config.Elevator {
 }
 
 // Initialize Elevator
-func InitElevator() {
+func InitElevator(localStatusUpdateChan chan config.Elevator) {
 
 	elevator = config.Elevator{
 		Floor:      0,
@@ -49,7 +48,7 @@ func InitElevator() {
 		elevator.Floor = elevio.GetFloor()
 	}
 	elevio.SetFloorIndicator(elevator.Floor)
-	communication.BroadcastElevatorStatus(GetElevatorState(), true)
+	localStatusUpdateChan <- GetElevatorState()
 	fmt.Printf("I'm starting at floor %v\n", elevator.Floor)
 
 	elevator.State = config.DoorOpen

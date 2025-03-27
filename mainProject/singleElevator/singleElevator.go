@@ -17,7 +17,7 @@ var (
 	delayedButtonEvent 			  elevio.ButtonEvent // Store delayed call for later clearance
 )
 
-func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan communication.OrderStatusMessage, txAckChan chan communication.AckMessage) {
+func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan communication.OrderStatusMessage, txAckChan chan communication.AckMessage, localStatusUpdateChan chan config.Elevator) {
 	
 	movementTimer.Stop()
 	obstructionTimer.Stop()
@@ -57,8 +57,8 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
     go func() {
         for {
             time.Sleep(1 * time.Second) 
-            communication.BroadcastElevatorStatus(GetElevatorState(), false)
-        }
+			localStatusUpdateChan <- GetElevatorState()        
+		}
     }()
 
 	// Event Loop
@@ -66,23 +66,23 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 		// Hardware
 		select {
 		case floorEvent := <-floorSensor:
-			ProcessFloorArrival(floorEvent, orderStatusChan) 
+			ProcessFloorArrival(floorEvent, orderStatusChan, localStatusUpdateChan) 
 		
 		case buttonEvent := <-buttonPress:
-			ProcessButtonPress(buttonEvent, hallCallChan, orderStatusChan) 
+			ProcessButtonPress(buttonEvent, hallCallChan, orderStatusChan, localStatusUpdateChan) 
 
 		case obstructionEvent := <-obstructionSwitch:
 			ProcessObstruction(obstructionEvent) 
 		
 		// Hall calls
 		case assignedOrder := <-assignedHallCallChan:
-			handleAssignedHallCall(assignedOrder, orderStatusChan) 
+			handleAssignedHallCall(assignedOrder, orderStatusChan, localStatusUpdateChan) 
 		
 		case rawCall := <-rawHallCallChan:
 			handleAssignedRawHallCall(rawCall, hallCallChan, txAckChan) 
 		
 		case networkAssignedOrder := <-assignedNetworkHallCallChan:
-			handleAssignedNetworkHallCall(networkAssignedOrder, orderStatusChan, txAckChan) 
+			handleAssignedNetworkHallCall(networkAssignedOrder, orderStatusChan, txAckChan, localStatusUpdateChan) 
 		
 		// Light orders
 		case lightOrder := <-lightOrderChan:
@@ -118,6 +118,6 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 			communication.SendOrderStatus(msg)
 			MarkAssignmentAsCompleted(msg.SeqNum)
 		}
-		communication.BroadcastElevatorStatus(GetElevatorState(), true)
+		localStatusUpdateChan <- GetElevatorState()	
 	}
 }

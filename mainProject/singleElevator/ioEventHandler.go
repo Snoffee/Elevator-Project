@@ -9,24 +9,24 @@ import (
 )
 
 // Handles button press events
-func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.ButtonEvent, orderStatusChan chan communication.OrderStatusMessage) {
+func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.ButtonEvent, orderStatusChan chan communication.OrderStatusMessage, localStatusUpdateChan chan config.Elevator) {
 	fmt.Printf("Button pressed: %+v\n\n", event)
 	
 	// Cab calls are handled locally
 	if event.Button == elevio.BT_Cab{
 		elevator.Queue[event.Floor][event.Button] = true
 		elevio.SetButtonLamp(event.Button, event.Floor, true)
-		communication.BroadcastElevatorStatus(GetElevatorState(), true)
+		localStatusUpdateChan <- GetElevatorState()
 		
 		floorSensorValue := elevio.GetFloor()
 		// If the elevator is already at the requested floor, process it immediately
 		if (elevator.Floor == event.Floor && floorSensorValue != -1){
 			fmt.Println("Cab call at current floor, processing immediately...")
 			time.Sleep(3 * time.Second)
-			ProcessFloorArrival(elevator.Floor, orderStatusChan)
+			ProcessFloorArrival(elevator.Floor, orderStatusChan, localStatusUpdateChan)
 			
-			communication.BroadcastElevatorStatus(GetElevatorState(), true)
-		} else {
+			localStatusUpdateChan <- GetElevatorState()
+			} else {
 			HandleStateTransition() 
 		}
 	} else {
@@ -35,7 +35,7 @@ func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.Butto
 }
 
 // Handles floor sensor events
-func ProcessFloorArrival(floor int, orderStatusChan chan communication.OrderStatusMessage) {
+func ProcessFloorArrival(floor int, orderStatusChan chan communication.OrderStatusMessage, localStatusUpdateChan chan config.Elevator) {
 	fmt.Printf("Floor sensor triggered: %+v\n", floor)
 	elevio.SetFloorIndicator(floor)
 	movementTimer.Reset(config.NotMovingTimeLimit * time.Second)
@@ -121,7 +121,7 @@ func ProcessFloorArrival(floor int, orderStatusChan chan communication.OrderStat
 		clearOppositeDirectionTimer.Reset(config.DoorOpenTime * time.Second)
 	} 
 
-	communication.BroadcastElevatorStatus(elevator, true)
+	localStatusUpdateChan <- GetElevatorState()
 }
 
 // Handles obstruction events

@@ -21,7 +21,7 @@ var (
 // -----------------------------------------------------------------------------
 // Handles an assigned hall call from `orderAssignment`
 // -----------------------------------------------------------------------------
-func handleAssignedHallCall(order elevio.ButtonEvent, orderStatusChan chan communication.OrderStatusMessage){
+func handleAssignedHallCall(order elevio.ButtonEvent, orderStatusChan chan communication.OrderStatusMessage, localStatusUpdateChan chan config.Elevator){
 	fmt.Printf(" Received assigned hall call: Floor %d, Button %d\n\n", order.Floor, order.Button)
 
 	elevator.Queue[order.Floor][order.Button] = true
@@ -38,9 +38,9 @@ func handleAssignedHallCall(order elevio.ButtonEvent, orderStatusChan chan commu
     if elevator.Floor == order.Floor && floorSensorValue != -1{
         fmt.Println("Already at assigned floor, processing immediately...")
 		time.Sleep(3 * time.Second)
-		ProcessFloorArrival(elevator.Floor, orderStatusChan)
-		communication.BroadcastElevatorStatus(GetElevatorState(), true)
-	} else {
+		ProcessFloorArrival(elevator.Floor, orderStatusChan, localStatusUpdateChan)
+        localStatusUpdateChan <- GetElevatorState()
+    } else {
         HandleStateTransition()
     }
 }
@@ -60,22 +60,25 @@ func handleAssignedRawHallCall(rawCall communication.RawHallCallMessage, hallCal
     }
     recentRawHallCalls[rawCall.SeqNum] = time.Now()
 	recentMessagesMutex.Unlock()
-	fmt.Printf("Processing raw hall call: Floor %d, Button %d\n", rawCall.Floor, rawCall.Button)
-	hallCallChan <- elevio.ButtonEvent{Floor: rawCall.Floor, Button: rawCall.Button}
-	
-	ackMsg:= communication.AckMessage{TargetID: rawCall.SenderID, SeqNum: rawCall.SeqNum}
+
+    ackMsg:= communication.AckMessage{TargetID: rawCall.SenderID, SeqNum: rawCall.SeqNum}
 	fmt.Printf("Broadcasting ack for RawHallCall to sender: %s | SeqNum: %d\n\n", ackMsg.TargetID, ackMsg.SeqNum)
 	for i := 0; i < 3; i++ {
 		txAckChan <- ackMsg
 		time.Sleep(20 * time.Millisecond)
 	}
+
+	fmt.Printf("Processing raw hall call: Floor %d, Button %d\n", rawCall.Floor, rawCall.Button)
+	hallCallChan <- elevio.ButtonEvent{Floor: rawCall.Floor, Button: rawCall.Button}
+	
+    //MarkRawHallCallAsCompleted(rawCall.SeqNum)
 }
 
 // -----------------------------------------------------------------------------
 // Receiving Hall Assignments from master (from network)
 // -----------------------------------------------------------------------------
 // If the best elevator was another elevator on the network the order gets sent here
-func handleAssignedNetworkHallCall(msg communication.AssignmentMessage, orderStatusChan chan communication.OrderStatusMessage, txAckChan chan communication.AckMessage) {
+func handleAssignedNetworkHallCall(msg communication.AssignmentMessage, orderStatusChan chan communication.OrderStatusMessage, txAckChan chan communication.AckMessage, localStatusUpdateChan chan config.Elevator) {
 	if msg.TargetID != config.LocalID {
         return
     }
@@ -88,7 +91,6 @@ func handleAssignedNetworkHallCall(msg communication.AssignmentMessage, orderSta
     recentAssignments[msg.SeqNum] = time.Now()
     recentMessagesMutex.Unlock()
 	fmt.Printf("Received hall assignment for me from network: Floor %d, Button %v\n\n", msg.Floor, msg.Button)
-	handleAssignedHallCall(elevio.ButtonEvent{Floor: msg.Floor, Button: msg.Button}, orderStatusChan)
 
 	ackMsg := communication.AckMessage{TargetID: config.MasterID, SeqNum: msg.SeqNum}
 	fmt.Printf("Broadcasting ack for assignment | SeqNum: %d\n\n", ackMsg.SeqNum)
@@ -96,6 +98,7 @@ func handleAssignedNetworkHallCall(msg communication.AssignmentMessage, orderSta
 		txAckChan <- ackMsg
 		time.Sleep(20 * time.Millisecond)
 	}
+    handleAssignedHallCall(elevio.ButtonEvent{Floor: msg.Floor, Button: msg.Button}, orderStatusChan, localStatusUpdateChan)
 }
 
 // -----------------------------------------------------------------------------
@@ -114,14 +117,6 @@ func handleLightOrder(lightOrder communication.LightOrderMessage, txAckChan chan
     recentLightOrderMessages[lightOrder.SeqNum] = time.Now()
     recentMessagesMutex.Unlock()
 
-    // Update the button lamp according to the received order
-    if lightOrder.Light == communication.Off {
-        elevio.SetButtonLamp(lightOrder.ButtonEvent.Button, lightOrder.ButtonEvent.Floor, false)
-        fmt.Printf("Turned OFF light: Floor %d, Button %v\n", lightOrder.ButtonEvent.Floor, lightOrder.ButtonEvent.Button)
-    } else {
-        elevio.SetButtonLamp(lightOrder.ButtonEvent.Button, lightOrder.ButtonEvent.Floor, true)
-        fmt.Printf("Turned ON light: Floor %d, Button %v\n", lightOrder.ButtonEvent.Floor, lightOrder.ButtonEvent.Button)
-    }
     // Send acknowledgment if this elevator is not the Master
     if config.LocalID != config.MasterID {
         ackMsg := communication.AckMessage{TargetID: config.MasterID, SeqNum: lightOrder.SeqNum}
@@ -131,6 +126,16 @@ func handleLightOrder(lightOrder communication.LightOrderMessage, txAckChan chan
         }
         fmt.Printf("Sending ack for LightOrder to master: %s | SeqNum: %d\n", config.MasterID, ackMsg.SeqNum)
     }
+
+    // Update the button lamp according to the received order
+    if lightOrder.Light == communication.Off {
+        elevio.SetButtonLamp(lightOrder.ButtonEvent.Button, lightOrder.ButtonEvent.Floor, false)
+        fmt.Printf("Turned OFF light: Floor %d, Button %v\n", lightOrder.ButtonEvent.Floor, lightOrder.ButtonEvent.Button)
+    } else {
+        elevio.SetButtonLamp(lightOrder.ButtonEvent.Button, lightOrder.ButtonEvent.Floor, true)
+        fmt.Printf("Turned ON light: Floor %d, Button %v\n", lightOrder.ButtonEvent.Floor, lightOrder.ButtonEvent.Button)
+    }
+    //MarkLightOrderAsCompleted(lightOrder.SeqNum)
 }
 
 // -----------------------------------------------------------------------------
@@ -154,8 +159,8 @@ func handleOrderStatus(status communication.OrderStatusMessage, txAckChan chan c
 	for i := 0; i < 10; i++ {
 		txAckChan <- ackMsg
 		time.Sleep(10 * time.Millisecond)
+        fmt.Printf("Sending ack for OrderStatusMessage to: %s | SeqNum: %d\n", status.SenderID, status.SeqNum)
 	}
-	fmt.Printf("Sending ack for OrderStatusMessage to: %s | SeqNum: %d\n", status.SenderID, status.SeqNum)
 	
     // Process the status message
     if status.Status == communication.Unfinished {
@@ -169,6 +174,7 @@ func handleOrderStatus(status communication.OrderStatusMessage, txAckChan chan c
 		communication.SendLightOrder(status.ButtonEvent, communication.Off, status.SenderID)
 		fmt.Printf("Turned off order hall light for all elevators\n\n")
     }
+    //MarkOrderStatusAsCompleted(status.SeqNum)
 }
 
 func flushRecentMessages() {

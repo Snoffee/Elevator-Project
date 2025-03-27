@@ -24,7 +24,7 @@ func RunOrderAssignment(elevatorStatusesChan chan map[string]communication.Eleva
 
 			case lostElevator := <-lostPeerChan:
 				if lostElevator == config.MasterID {
-					masterElection.ElectMaster(latestElevatorStatuses, masterChan)
+					masterElection.RunMasterElection(elevatorStatusesChan, masterChan)
 					newMasterID := <-masterChan
 					config.MasterID = newMasterID
 				}

@@ -61,11 +61,11 @@ func shouldStopAtFloor(elevator config.Elevator) bool{
 	case elevio.MD_Up:
 		return elevator.Queue[elevator.Floor][int(elevio.BT_HallUp)] == true ||
 		elevator.Queue[elevator.Floor][int(elevio.BT_Cab)] ==  true ||
-		!singleElevator.HasOrdersAbove(elevator)
+		!HasOrdersAbove(elevator)
 	case elevio.MD_Down:
 		return elevator.Queue[elevator.Floor][int(elevio.BT_HallDown)] == true ||
 			elevator.Queue[elevator.Floor][int(elevio.BT_Cab)] == true ||
-			!singleElevator.HasOrdersBelow(elevator)
+			!HasOrdersBelow(elevator)
 	default:
 		return true
 	}
@@ -76,13 +76,61 @@ func clearCurrentFloorFromQueue(elevator *config.Elevator){
 	switch elevator.Direction{
 	case elevio.MD_Up:
 		elevator.Queue[elevator.Floor][int(elevio.BT_HallUp)] = false
-		if !singleElevator.HasOrdersAbove(*elevator) {
+		if !HasOrdersAbove(*elevator) {
 			elevator.Queue[elevator.Floor][int(elevio.BT_HallDown)] = false
 		}
 	case elevio.MD_Down:
 		elevator.Queue[elevator.Floor][int(elevio.BT_HallUp)] = false
-		if !singleElevator.HasOrdersBelow(*elevator) {
+		if !HasOrdersBelow(*elevator) {
 			elevator.Queue[elevator.Floor][int(elevio.BT_HallDown)] = false
 		}
 	}
+}
+
+// Decides which direction is the most sensible to choose next
+func ChooseDirection(e config.Elevator) elevio.MotorDirection {
+	switch e.Direction {
+	case elevio.MD_Up:
+		if HasOrdersAbove(e) {
+			return elevio.MD_Up
+		} else if HasOrdersBelow(e) {
+			return elevio.MD_Down
+		} else {
+			return elevio.MD_Stop
+		}
+	case elevio.MD_Stop:
+		fallthrough
+
+	case elevio.MD_Down:
+		if HasOrdersBelow(e) {
+			return elevio.MD_Down
+		} else if HasOrdersAbove(e) {
+			return elevio.MD_Up
+		} else {
+			return elevio.MD_Stop
+		}
+	}
+	return elevio.MD_Stop
+}
+
+func HasOrdersAbove(e config.Elevator) bool {
+	for f := e.Floor + 1; f < config.NumFloors; f++ {
+		for b := 0; b < config.NumButtons; b++ {
+			if e.Queue[f][b] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func HasOrdersBelow(e config.Elevator) bool {
+	for f := 0; f < e.Floor; f++ {
+		for b := 0; b < config.NumButtons; b++ {
+			if e.Queue[f][b] {
+				return true
+			}
+		}
+	}
+	return false
 }

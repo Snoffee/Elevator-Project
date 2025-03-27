@@ -1,7 +1,6 @@
 package communication
 
 import (
-	//"fmt"
 	"mainProject/config"
 	"mainProject/elevio"
 	"mainProject/network/bcast"
@@ -17,7 +16,7 @@ const (
 	txrawHallCallPort = 30003 // Port for raw hall calls (hall calls received by slaves, that needs to be forwarded to the master before assigning them)
 	ackPort			  = 30004 // Port for reading the masters ack for hall calls from slaves
 	statusPort        = 30005 // Port for hall call confirmations
-	lightPort         = 30006 // Port for light orders (hall call lights)
+	lightPort         = 30006 // Port for hall call light orders
 )
 
 // -----------------------------------------------------------------------------

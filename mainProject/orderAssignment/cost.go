@@ -5,24 +5,20 @@ import (
 	"mainProject/config"
 	"mainProject/elevio"
 	"mainProject/singleElevator"
-	"fmt"
 )
 
 const(
-	travelTime = 8
+	travelTime = 5 //Seconds. Around 2 for simulator, around - for physical elevator
 )
 
 func cost(elevator communication.ElevatorStatus, order elevio.ButtonEvent) int{
-
+	//Making an elevator object from the passed ElevatorStatus argument
 	var e config.Elevator
 	e.Floor = elevator.Floor
 	e.Direction = elevator.Direction
 	e.Queue = elevator.Queue
 	e.State = elevator.State
-	e.Obstructed = false
 	e.Queue[order.Floor][order.Button] = true
-
-	fmt.Printf("My state %v", e.State)
 
 	timeToCompleteOrders := 0
 
@@ -35,13 +31,13 @@ func cost(elevator communication.ElevatorStatus, order elevio.ButtonEvent) int{
 			}
 		}
 	case config.Moving:
-		timeToCompleteOrders += (travelTime/2) //antar halvveis mellom etasjer
+		timeToCompleteOrders += (travelTime/2) //Assumes elevator is halfway between floors
 		e.Floor += int(e.Direction)
 	case config.DoorOpen:
-		timeToCompleteOrders += config.DoorOpenTime/2
+		timeToCompleteOrders += config.DoorOpenTime/2 //Assumes door has been open for half the required time
 	}
 	
-
+	//simulates the time it takes to complete orders for the given elevator
 	for {
 		if shouldStopAtFloor(e) {
 			clearCurrentFloorFromQueue(&e)
@@ -54,16 +50,11 @@ func cost(elevator communication.ElevatorStatus, order elevio.ButtonEvent) int{
 			return timeToCompleteOrders
 		}
 	
-		// Only move if we have a direction
 		e.Floor += int(e.Direction)
 		timeToCompleteOrders += travelTime
 	}
 	
 }
-
-
-
-
 
 func shouldStopAtFloor(elevator config.Elevator) bool{
 	switch elevator.Direction {

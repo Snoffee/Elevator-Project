@@ -60,7 +60,7 @@ func BroadcastElevatorStatus(e config.Elevator, isCriticalEvent bool) {
     localElevatorStatus := ElevatorStatus{
         ID:        config.LocalID,
         Floor:     e.Floor,
-		State: e.State,
+		State:     e.State,
         Direction: e.Direction,
         Queue:     e.Queue,
         Timestamp: time.Now(),

@@ -25,8 +25,6 @@ func main() {
 	assignedHallCallChan := make(chan elevio.ButtonEvent, 20) // Receive assigned hall calls
 	txAckChan			 := make(chan network.AckMessage, 20)
 
-	//Missing ack channel ting og tang
-
 	// Start single_elevator
 	go singleElevator.RunSingleElevator(hallCallChan, assignedHallCallChan, orderStatusChan, txAckChan)
 

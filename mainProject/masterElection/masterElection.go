@@ -10,10 +10,9 @@ import (
 var (
 	stateMutex 	sync.Mutex
 	masterID   	string
-	masterVersion int
 )
 
-// **Runs Master Election and Listens for Updates**
+// Runs Master Election and Listens for Updates
 func RunMasterElection(elevatorStateChan chan map[string]network.ElevatorStatus, masterChan chan string) {
 	go func() {
 		for elevatorStates := range elevatorStateChan {
@@ -22,25 +21,22 @@ func RunMasterElection(elevatorStateChan chan map[string]network.ElevatorStatus,
 	}()
 }
 
-// **Elect Master: Assign the lowest ID as master**
+// Elect Master: Assign the lowest ID as master
 func ElectMaster(elevatorStates map[string]network.ElevatorStatus, masterChan chan string) {
 	stateMutex.Lock()
 	defer stateMutex.Unlock()
 
-	// Find the lowest ID among active elevators
 	lowestID := config.LocalID
 	for id := range elevatorStates {
 		if id < lowestID {
 			lowestID = id
 		}
 	}
-
     if masterID == lowestID {
         return
     }
 
     masterID = lowestID
-    masterVersion++
-    fmt.Printf("New Master Elected: %s (Version %d)\n\n", masterID, masterVersion)
+    fmt.Printf("New Master Elected: %s\n\n", masterID)
     masterChan <- masterID
 }

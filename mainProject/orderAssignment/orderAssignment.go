@@ -8,7 +8,6 @@ import (
 	"fmt"
 )
 
-// Run Order Assignment as a Goroutine
 func RunOrderAssignment(elevatorStatusesChan chan map[string]communication.ElevatorStatus, masterChan chan string, lostPeerChan chan string, newPeerChan chan string, hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan communication.OrderStatusMessage, txAckChan chan communication.AckMessage) {
 
 	go func() {
@@ -31,7 +30,7 @@ func RunOrderAssignment(elevatorStatusesChan chan map[string]communication.Eleva
 				if config.MasterID == config.LocalID && latestElevatorStatuses != nil {
 					reassignedHallOrders := getReassignedHallOrders(lostElevator, latestElevatorStatuses)
 					for _, order := range reassignedHallOrders {
-						bestElevator := findBestElevator(order.Floor, latestElevatorStatuses, lostElevator) 
+						bestElevator := findBestElevator(order, latestElevatorStatuses, lostElevator) 
 						fmt.Printf("Reassigned order at floor %d to %s\n\n", order.Floor, bestElevator)
 						if bestElevator == config.LocalID {
 							assignedHallCallChan <- order
@@ -51,7 +50,7 @@ func RunOrderAssignment(elevatorStatusesChan chan map[string]communication.Eleva
 				}
 			case hallCall := <-hallCallChan: 
 				if config.MasterID == config.LocalID {
-					bestElevator := findBestElevator(hallCall.Floor, latestElevatorStatuses, "") // Passing "" on excludeElevator when normally calling AssignHallOrder		
+					bestElevator := findBestElevator(hallCall, latestElevatorStatuses, "") // Passing "" on excludeElevator when normally calling AssignHallOrder		
 					
 					if bestElevator == config.LocalID {
 						assignedHallCallChan <- hallCall
@@ -106,33 +105,25 @@ func getReassignedCabCalls(recoveredElevator string, backupElevatorStates map[st
 	return reassignedCabCalls
 }
 
-// Determines the closest available elevator to a given floor and button call
-func findBestElevator(floor int, elevatorStatuses map[string]communication.ElevatorStatus, excludeElevator string) string {
+// Determines the best available elevator based on cost function
+
+func findBestElevator(order elevio.ButtonEvent, elevatorStatuses map[string]communication.ElevatorStatus, excludeElevator string) string {
 	fmt.Printf("Available elevators: %v\n\n", elevatorStatuses)
 	bestElevator := ""
-	bestDistance := config.NumFloors + 1
+	bestCost := 999
 
 	for id, state := range elevatorStatuses {
 		if id == excludeElevator { 
 			continue 
 		}
-		distance := abs(state.Floor - floor)
-		fmt.Printf("Checking elevator %s at floor %d (distance: %d)\n", id, state.Floor, distance)
+		cost := cost(state, order)
+		fmt.Printf("Checking elevator %s at floor %d (cost: %d)\n", id, state.Floor, cost)
 
-		if distance < bestDistance {
+		if cost < bestCost {
 			bestElevator = id
-			bestDistance = distance
+			bestCost = cost
 		}
 	}
 	fmt.Println()
 	return bestElevator
 }
-
-// Helper function to calculate absolute distance
-func abs(a int) int {
-	if a < 0 {
-		return -a
-	}
-	return a
-}
-

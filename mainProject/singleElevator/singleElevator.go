@@ -9,6 +9,11 @@ import (
 	"time"
 )
 
+const (
+	notMovingTimeLimit = 8 // Seconds
+	obstructionTimeLimit = 4 // Seconds
+)
+
 var (
 	movementTimer				= time.NewTimer(20 * time.Second)
 	obstructionTimer 			= time.NewTimer(20 * time.Second)

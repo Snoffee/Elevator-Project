@@ -26,7 +26,8 @@ const (
 type ElevatorStatus struct {
 	ID        string
 	Floor     int
-	Direction config.ElevatorState
+	State config.ElevatorState
+	Direction elevio.MotorDirection
 	Queue     [config.NumFloors][config.NumButtons]bool
 	Timestamp time.Time
 }

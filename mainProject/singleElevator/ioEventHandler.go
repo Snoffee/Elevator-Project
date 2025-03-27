@@ -38,7 +38,7 @@ func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.Butto
 func ProcessFloorArrival(floor int, orderStatusChan chan communication.OrderStatusMessage) {
 	fmt.Printf("Floor sensor triggered: %+v\n", floor)
 	elevio.SetFloorIndicator(floor)
-	movementTimer.Reset(config.NotMovingTimeLimit * time.Second)
+	movementTimer.Reset(notMovingTimeLimit * time.Second)
 
 	if !hasOrdersAtFloor(floor) {
 		return
@@ -71,14 +71,15 @@ func ProcessFloorArrival(floor int, orderStatusChan chan communication.OrderStat
 		}
 	}
 
-	// Decide which direction should be cleared first
+	// Decide which direction should be cleared first.
+	
 	var firstClearButton elevio.ButtonType
 	var secondClearButton elevio.ButtonType
 	shouldDelaySecondClear := false
-
+	//Checks for both directions. If true, clears the least prioritized direction first.
 	if hasUpCall && hasDownCall{
 		shouldDelaySecondClear = true
-		if elevator.Direction == elevio.MD_Up && ordersAbove{
+		if elevator.Direction == elevio.MD_Up && ordersAbove{ //If moving in a certain direction, it is prioritized.
 			firstClearButton = elevio.BT_HallDown
 			secondClearButton = elevio.BT_HallUp
 		}else if elevator.Direction == elevio.MD_Down && ordersBelow{
@@ -124,7 +125,6 @@ func ProcessFloorArrival(floor int, orderStatusChan chan communication.OrderStat
 	communication.BroadcastElevatorStatus(elevator, true)
 }
 
-// Handles obstruction events
 func ProcessObstruction(obstructed bool) {
 	elevator.Obstructed = obstructed
 

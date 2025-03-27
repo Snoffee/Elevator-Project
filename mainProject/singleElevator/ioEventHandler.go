@@ -55,6 +55,11 @@ func ProcessFloorArrival(floor int, orderStatusChan chan communication.OrderStat
 	hasDownCall := elevator.Queue[floor][elevio.BT_HallDown]
 	ordersBelow := HasOrdersBelow(elevator)
 	hasCabCall := elevator.Queue[floor][elevio.BT_Cab]
+	hasOnlyOneDirectionInQueue := false
+	if (ordersAbove && !ordersBelow) || (!ordersAbove && ordersBelow){
+		hasOnlyOneDirectionInQueue = true
+	}
+
 
 	fmt.Println("Transitioning from Moving to DoorOpen...")
 	elevator.State = config.DoorOpen
@@ -77,7 +82,7 @@ func ProcessFloorArrival(floor int, orderStatusChan chan communication.OrderStat
 	var secondClearButton elevio.ButtonType
 	shouldDelaySecondClear := false
 	//Checks for both directions. If true, clears the least prioritized direction first.
-	if hasUpCall && hasDownCall{
+	if hasUpCall && hasDownCall && hasOnlyOneDirectionInQueue{
 		shouldDelaySecondClear = true
 		if elevator.Direction == elevio.MD_Up && ordersAbove{ //If moving in a certain direction, it is prioritized.
 			firstClearButton = elevio.BT_HallDown
@@ -86,13 +91,21 @@ func ProcessFloorArrival(floor int, orderStatusChan chan communication.OrderStat
 			firstClearButton = elevio.BT_HallUp
 			secondClearButton = elevio.BT_HallDown
 		}else{
-			if ordersAbove {
+			if ordersAbove{
 				firstClearButton = elevio.BT_HallDown
 				secondClearButton = elevio.BT_HallUp
-			} else if ordersBelow {
+			} else if ordersBelow{
 				firstClearButton = elevio.BT_HallDown
 				secondClearButton = elevio.BT_HallUp
 			}
+		}
+	}else if hasUpCall && hasDownCall{
+		if elevator.Direction == elevio.MD_Up{ //If moving in a certain direction, it is prioritized.
+			firstClearButton = elevio.BT_HallUp
+		}else if elevator.Direction == elevio.MD_Down{ //If moving in a certain direction, it is prioritized.
+			firstClearButton = elevio.BT_HallDown
+		}else{
+			firstClearButton = elevio.BT_HallDown
 		}
 	}else{
 		if hasUpCall{

@@ -172,13 +172,14 @@ func handleOrderStatus(status communication.OrderStatusMessage, txAckChan chan c
 }
 
 func flushRecentMessages() {
+    const messageTimeout = 10 * time.Second
     for {
         time.Sleep(10 * time.Second) 
         now := time.Now()
         
         recentMessagesMutex.Lock()
         for seqNum, timestamp := range recentAssignments {
-            if now.Sub(timestamp) > config.MessageTimeout {
+            if now.Sub(timestamp) > messageTimeout {
                 delete(recentAssignments, seqNum)
             }
         }
@@ -186,7 +187,7 @@ func flushRecentMessages() {
 
         recentMessagesMutex.Lock()
         for seqNum, timestamp := range recentRawHallCalls {
-            if now.Sub(timestamp) > config.MessageTimeout {
+            if now.Sub(timestamp) > messageTimeout {
                 delete(recentRawHallCalls, seqNum)
             }
         }
@@ -194,7 +195,7 @@ func flushRecentMessages() {
 
         recentMessagesMutex.Lock()
         for seqNum, timestamp := range recentOrderStatusMessages {
-            if now.Sub(timestamp) > config.MessageTimeout {
+            if now.Sub(timestamp) > messageTimeout {
                 delete(recentOrderStatusMessages, seqNum)
             }
         }
@@ -202,7 +203,7 @@ func flushRecentMessages() {
 
         recentMessagesMutex.Lock()
         for seqNum, timestamp := range recentLightOrderMessages {
-            if now.Sub(timestamp) > config.MessageTimeout {
+            if now.Sub(timestamp) > messageTimeout {
                 delete(recentLightOrderMessages, seqNum)
             }
         }

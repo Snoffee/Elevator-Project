@@ -30,7 +30,6 @@ const (
 	DoorOpenTime = 3 // Seconds
 	NotMovingTimeLimit = 8 // Seconds
 	ObstructionTimeLimit = 4 // Seconds
-	MessageTimeout = 10 * time.Second
 )
 
 var LocalID string

@@ -9,7 +9,6 @@ import (
 
 var (
 	stateMutex 	sync.Mutex
-	masterID   	string
 )
 
 // Runs Master Election and Listens for Updates
@@ -32,11 +31,11 @@ func ElectMaster(elevatorStates map[string]communication.ElevatorStatus, masterC
 			lowestID = id
 		}
 	}
-    if masterID == lowestID {
+    if config.MasterID == lowestID {
         return
     }
 
-    masterID = lowestID
-    fmt.Printf("New Master Elected: %s\n\n", masterID)
-    masterChan <- masterID
+    config.MasterID = lowestID
+    fmt.Printf("New Master Elected: %s\n\n", config.MasterID)
+    masterChan <- config.MasterID
 }

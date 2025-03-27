@@ -27,9 +27,7 @@ type Elevator struct {
 const (
 	NumFloors  = 4
 	NumButtons = 3
-	DoorOpenTime = 3 // Seconds
-	NotMovingTimeLimit = 8 // Seconds
-	ObstructionTimeLimit = 4 // Seconds
+	DoorOpenTime = 3 //Seconds
 )
 
 var LocalID string

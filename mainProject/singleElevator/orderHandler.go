@@ -154,7 +154,7 @@ func handleOrderStatus(status communication.OrderStatusMessage, txAckChan chan c
     recentOrderStatusMessages[status.SeqNum] = time.Now()
 	recentMessagesMutex.Unlock()
 
-    // Send acknowledgment. Mulitple to handle packet loss better.
+    // Send acknowledgment. Multiple to handle packet loss better.
 	ackMsg := communication.AckMessage{TargetID: config.MasterID, SeqNum: status.SeqNum}
 	for i := 0; i < 10; i++ {
 		txAckChan <- ackMsg

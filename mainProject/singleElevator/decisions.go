@@ -5,7 +5,7 @@ import (
 	"mainProject/elevio"
 )
 
-// Decides next direction
+// Decides which direction is the most sensible to choose next
 func ChooseDirection(e config.Elevator) elevio.MotorDirection {
 	switch e.Direction {
 	case elevio.MD_Up:

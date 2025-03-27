@@ -9,9 +9,14 @@ import (
 	"time"
 )
 
+const (
+	notMovingTimeLimit = 8 // Seconds
+	obstructionTimeLimit = 4 // Seconds
+)
+
 var (
-	movementTimer				= time.NewTimer(20 * time.Second)
-	obstructionTimer 			= time.NewTimer(20 * time.Second)
+	movementTimer				= time.NewTimer(notMovingTimeLimit * time.Second)
+	obstructionTimer 			= time.NewTimer(obstructionTimeLimit * time.Second)
 	doorTimer 					= time.NewTimer(config.DoorOpenTime * time.Second)
 	clearOppositeDirectionTimer = time.NewTimer(config.DoorOpenTime * time.Second)
 	delayedButtonEvent 			  elevio.ButtonEvent // Store delayed call for later clearance
@@ -19,6 +24,7 @@ var (
 
 func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallChan chan elevio.ButtonEvent, orderStatusChan chan communication.OrderStatusMessage, txAckChan chan communication.AckMessage, localStatusUpdateChan chan config.Elevator) {
 	
+	//Initial stop of timers, as we do not need them yet
 	movementTimer.Stop()
 	obstructionTimer.Stop()
 	doorTimer.Stop()

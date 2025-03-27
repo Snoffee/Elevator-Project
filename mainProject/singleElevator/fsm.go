@@ -10,7 +10,6 @@ import (
 
 var elevator config.Elevator
 
-// Get the entire elevator state
 func GetElevatorState() config.Elevator {
 	return elevator
 }
@@ -31,8 +30,10 @@ func InitElevator(localStatusUpdateChan chan config.Elevator) {
 			elevio.SetButtonLamp(button, f, false)
 		}
 	}
-	//Correctly sets current floor
+
 	elevator.Obstructed = elevio.GetObstruction()
+
+	//Correctly sets current floor. Moves elevator down to floor below if between floors.
 	floor := elevio.GetFloor()
 	fmt.Printf("Read initial floor as %v\n", floor)
 	switch floor{
@@ -51,6 +52,7 @@ func InitElevator(localStatusUpdateChan chan config.Elevator) {
 	localStatusUpdateChan <- GetElevatorState()
 	fmt.Printf("I'm starting at floor %v\n", elevator.Floor)
 
+	//Opens door every time it reinitializes.
 	elevator.State = config.DoorOpen
 	if elevator.Floor != -1 {
 		elevio.SetDoorOpenLamp(true)
@@ -71,7 +73,7 @@ func HandleStateTransition() {
 		if nextDir != elevio.MD_Stop {
 			fmt.Println("Transitioning from Idle to Moving...")
 			// Cancel previous timeout and start a new one
-			movementTimer.Reset(config.NotMovingTimeLimit * time.Second)
+			movementTimer.Reset(notMovingTimeLimit * time.Second)
 			elevator.State = config.Moving
 			elevator.Direction = nextDir
 			elevio.SetMotorDirection(nextDir)
@@ -89,7 +91,7 @@ func HandleStateTransition() {
 		if elevator.Obstructed {
 			fmt.Println("Door remains open due to obstruction.")
 			doorTimer.Stop()
-			obstructionTimer.Reset(config.ObstructionTimeLimit * time.Second)
+			obstructionTimer.Reset(obstructionTimeLimit * time.Second)
 			return
 		}
 		doorTimer.Reset(config.DoorOpenTime * time.Second)

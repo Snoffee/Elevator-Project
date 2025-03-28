@@ -74,6 +74,7 @@ func ProcessObstruction(obstructed bool, orderStatusChan chan communication.Orde
 	}
 }
 
+//Used after HandleFloorArrival to decide which orders are cleared
 func hallCallClearOrder(floor int)(elevio.ButtonType, elevio.ButtonType, bool){
 
 	hasDownCall := elevator.Queue[floor][elevio.BT_HallDown]
@@ -149,7 +150,8 @@ func hallCallClearOrder(floor int)(elevio.ButtonType, elevio.ButtonType, bool){
 	return firstClearButton, secondClearButton, shouldDelaySecondClear
 }
 
-func clearAllOrdersAtFloor(floor int, orderStatusChan chan communication.OrderStatusMessage, localStatusUpdateChan chan config.Elevator, firstClearButton elevio.ButtonType, secondClearButton elevio.ButtonType, shouldDelaySecondClear bool){
+//Performs the clearing of hall calls as decided by func hallCallClearOrder
+func clearAllOrdersAtFloor(floor int, orderStatusChan chan communication.OrderStatusMessage, localStatusUpdateChan chan config.Elevator, firstClearButton elevio.ButtonType){
 
 	if(firstClearButton == elevio.BT_Cab){
 		return
@@ -167,23 +169,4 @@ func clearAllOrdersAtFloor(floor int, orderStatusChan chan communication.OrderSt
 
 	localStatusUpdateChan <- GetElevatorState()
 
-}
-
-func clearLingeringHallCalls(nextDir elevio.MotorDirection, orderStatusChan chan communication.OrderStatusMessage){
-	currentFloor := elevio.GetFloor()
-	if elevator.Queue[currentFloor][elevio.BT_HallDown] == true && nextDir == elevio.MD_Down{
-		elevator.Queue[currentFloor][elevio.BT_HallDown] = false
-		elevio.SetButtonLamp(elevio.BT_HallDown,currentFloor,false)
-		msg := communication.OrderStatusMessage{ButtonEvent: elevio.ButtonEvent{Floor: currentFloor, Button: elevio.BT_HallDown}, SenderID: config.LocalID, Status: communication.Finished}
-		orderStatusChan <- msg
-		go communication.SendOrderStatus(msg)
-		MarkAssignmentAsCompleted(msg.SeqNum)
-	}else if elevator.Queue[currentFloor][elevio.BT_HallUp] == true && nextDir == elevio.MD_Up{
-		elevator.Queue[currentFloor][elevio.BT_HallUp] = false
-		elevio.SetButtonLamp(elevio.BT_HallUp,currentFloor,false)
-		msg := communication.OrderStatusMessage{ButtonEvent: elevio.ButtonEvent{Floor: currentFloor, Button: elevio.BT_HallUp}, SenderID: config.LocalID, Status: communication.Finished}
-		orderStatusChan <- msg
-		go communication.SendOrderStatus(msg)
-		MarkAssignmentAsCompleted(msg.SeqNum)
-	}
 }

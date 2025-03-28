@@ -110,7 +110,7 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 				fmt.Println("Transitioning from DoorOpen to Idle...")
 				elevio.SetDoorOpenLamp(false)
 				firstClearButton, secondClearButton, shouldDelaySecondClear := hallCallClearOrder(elevator.Floor)
-				clearAllOrdersAtFloor(elevator.Floor, orderStatusChan, localStatusUpdateChan, firstClearButton, secondClearButton, shouldDelaySecondClear)
+				clearAllOrdersAtFloor(elevator.Floor, orderStatusChan, localStatusUpdateChan, firstClearButton)
 				if shouldDelaySecondClear{
 					fmt.Println("Keeping door open for an extra 3 seconds before changing direction...")
 					movementTimer.Stop()

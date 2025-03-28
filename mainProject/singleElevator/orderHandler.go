@@ -223,3 +223,23 @@ func MarkAssignmentAsCompleted(seqNum int) {
     delete(recentAssignments, seqNum)
     recentMessagesMutex.Unlock()
 }
+
+//Clears up hall calls which are not immediately cleared due to, for example, no cab calls in the direction
+func clearLingeringHallCalls(nextDir elevio.MotorDirection, orderStatusChan chan communication.OrderStatusMessage){
+	currentFloor := elevio.GetFloor()
+	if elevator.Queue[currentFloor][elevio.BT_HallDown] == true && nextDir == elevio.MD_Down{
+		elevator.Queue[currentFloor][elevio.BT_HallDown] = false
+		elevio.SetButtonLamp(elevio.BT_HallDown,currentFloor,false)
+		msg := communication.OrderStatusMessage{ButtonEvent: elevio.ButtonEvent{Floor: currentFloor, Button: elevio.BT_HallDown}, SenderID: config.LocalID, Status: communication.Finished}
+		orderStatusChan <- msg
+		go communication.SendOrderStatus(msg)
+		MarkAssignmentAsCompleted(msg.SeqNum)
+	}else if elevator.Queue[currentFloor][elevio.BT_HallUp] == true && nextDir == elevio.MD_Up{
+		elevator.Queue[currentFloor][elevio.BT_HallUp] = false
+		elevio.SetButtonLamp(elevio.BT_HallUp,currentFloor,false)
+		msg := communication.OrderStatusMessage{ButtonEvent: elevio.ButtonEvent{Floor: currentFloor, Button: elevio.BT_HallUp}, SenderID: config.LocalID, Status: communication.Finished}
+		orderStatusChan <- msg
+		go communication.SendOrderStatus(msg)
+		MarkAssignmentAsCompleted(msg.SeqNum)
+	}
+}

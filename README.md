@@ -59,7 +59,7 @@ Each elevator has its own supervisor that keeps tabs on the executable. It detec
 | `config`        | Environment variables.     						 | Global `LocalID`, `MasterID`, and constants (`NumFloors`, `NumButtons`). Initializes elevator |
 | `elevio`        | Hardware commands.| Provides button press events, floor sensor events, obstruction events. Writes to hardware interface. |
 | `communication` |Elevator Status Updates, Order Status, Acks. 			 | Ensures reliable transmission of messages with acknowledgments and retries. Broadcasts Elevator Statuses periodically and in bursts at critical events |
-| `supervisor`    | Fault detection (Timeout events).                             | Forces system shutdown or restart upon detecting faults. |
+| `supervisor`    | Fault detection (Timeout events).                             | Restarts elevator when its down. |
 
 ---
 

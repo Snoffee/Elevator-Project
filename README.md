@@ -40,7 +40,7 @@ If the current master goes offline, the elevator with the lowest ID of the remai
 All elevators communicate using UDP broadcasting, ensuring that network messages such as peer updates, master elections, and order assignments are efficiently shared.
 
 - **Acknowledgement System:**
-All message types are confirmed by the recipient sending an acknowledgement message to the transmitter. The transmitter keeps resending messages untill an acknowledgement is received or it times out.
+All messages are equipped with individual sequence numbers and confirmed by the recipient sending an acknowledgement message with the same sequence number to the transmitter. The transmitter keeps resending messages untill an acknowledgement is received or it times out.
 
 - **Supervisor:**
 Each elevator has its own supervisor that keeps tabs on the executable. It detects when the executable is down and automatically restarts it. Used to handle failure states, like loss of motor power and obstruction problems.
@@ -62,22 +62,59 @@ The system is built around **Go channels**, which handle all inter-module commun
 
 ---
 
-## **Communication Overview**
+## **Hall Button Press Lifecycle**
+Different handling of hall button press based on the source elevator. Slaves 
 ![486748424_9977059018973185_4486015035974998800_n](https://github.com/user-attachments/assets/f8352c70-77c4-40a6-b0a4-2dc53cf4ef64)
 
 ---
 
-## **Setup and Running the Project**
+## **Message Types**
+We made an overview of senders and receivers of messages to keep ping pong packets to a minimum.
 
-Set up environment variables:
+The receiver of a message sends AckMessage to sender. 
+
+| 	               | **Sender** | **Receiver** |
+|----------------------|------------|--------------|
+| `LightOrderMessage`  | 👑 | NOT: 👑 and recipient of assignment |
+| `AssignmentMessage` | 👑 | ALL |
+| `RawHallCallMessage` | Slaves | 👑 |
+| `OrderStatusMessage` | ALL | 👑 |
+
+Recently received messages are kept in individual maps based on type, to ensure no duplication of execution. Due to our resending mechanism, the same message can be received multiple times if acknowledgment packets are lost on the network. These maps block duplicates from being processed again and potentially causing unwanted behaviour.
+
+---
+
+## **Setup and Running the Project**
+Set up environment variables for each elevator when running multiple elevators on the same machine. Specify the unique elevator ID and port number:
 
 - **Windows PowerShell**
+	- Terminal 1: 	
 	- $env:ELEVATOR_PORT="15657"
 	- $env:ELEVATOR_ID="elevator_1"
 
+  	- Terminal 2
+	- $env:ELEVATOR_PORT="15658"
+	- $env:ELEVATOR_ID="elevator_2"
+
 - **Linux (or macOS)**
+	- Terminal 1:
 	- export ELEVATOR_PORT="15657"
 	- export ELEVATOR_ID="elevator_1"
 
+	- Terminal 2
+	- export ELEVATOR_PORT="15658"
+	- export ELEVATOR_ID="elevator_2"
+
 To start the elevator system:
 - go run main.go
+
+## **Using the script**
+Additionally you can start an elevator with a corresponding simulator and supervisor by running the script. If no parameters are provided, the script will default to elevator_1 and port 15657
+
+- **Windows PowerShell**
+	- Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+	- .\start_system.ps1 -ElevatorID "elevator_1" -ElevatorPort "15657"
+
+- **Linux (or macOS)**
+	- chmod +x start_system.sh to make the file executable
+	- ./start_system.sh elevator_1 15657

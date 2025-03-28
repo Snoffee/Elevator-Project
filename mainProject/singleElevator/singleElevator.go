@@ -62,7 +62,7 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 	// Periodic Broadcast - Continuously broadcasts the elevator status to other elevators
     go func() {
         for {
-            time.Sleep(1 * time.Second)
+            time.Sleep(500 * time.Millisecond)
 			localStatusUpdateChan <- GetElevatorState()        
 		}
     }()

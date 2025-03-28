@@ -1,7 +1,5 @@
-### **Elevator-Project**
+# **Elevator-Project**
 TTK4145 Sanntidsprogramering
-
-![alt text](Overview.png)
 
 ## **Overview**
 This project implements a **multi-elevator system** that can:
@@ -16,26 +14,36 @@ The system is built using **Go** and follows a **modular architecture** with cle
 ## **Project Structure**
 | **Module**           | **Description** |
 |----------------------|----------------|
-| `main.go`            | Initializes the system, sets up channels, and starts goroutines. |
-| `single_elevator.go` | Handles individual elevator logic (cab calls, movement, state transitions). |
-| `order_assignment.go` | Assigns hall calls based on elevator states and reassigns lost orders. |
-| `master_election.go` | Elects a master elevator and ensures consistent master updates. |
-| `peer_monitor.go`    | Monitors connected elevators and detects failures. |
-| `network.go`         | Handles peer communication and broadcasts elevator states. |
-| `config.go`          | Defines shared configurations and constants. |
+| `main`            | Initializes the system, sets up channels, and starts goroutines. |
+| `singleElevator` | Handles individual elevator logic (cab calls, movement, state transitions). |
+| `orderAssignment` | Assigns hall calls based on elevator states and reassigns lost orders. |
+| `masterElection` | Elects a master elevator and ensures consistent master updates. |
+| `peerMonitor`    | Monitors connected elevators and detects failures. |
+| `network`         | Handles peer communication and broadcasts elevator states. |
+| `config`          | Defines shared configurations and constants. |
+| `elevio`          | . |
+| `communication`   | Handles message sending, elevator status updates and generally manages network functionality. |
+| `supervisor`   | Restarts the elevator when it enters a failure state. |
+
 
 ---
 
 ## **Architecture**
 
 - **Master-Slave Model:**
-The system operates in a master-slave configuration. One elevator is elected as the master, which is responsible for handling hall call assignments and order distribution. Other elevators act as slaves, executing assigned hall orders.
+The system operates in a master-slave configuration. One elevator is elected as the master, which is responsible for handling hall call assignments, order distribution and reassigning of lost hall calls. In addition, it sends a backup of a resurrected slaves previous cab calls. Other elevators act as slaves, executing assigned hall orders.
 
 - **Master Election:**
-If the current master goes offline, a new master is elected based on a predefined election algorithm (e.g., choosing the elevator with the lowest ID).
+If the current master goes offline, the elevator with the lowest ID of the remaining is elected as the new master. A reelection is held every time a new peer enters the network.
 
 - **Communication Protocol:**
 All elevators communicate using UDP broadcasting, ensuring that network messages such as peer updates, master elections, and order assignments are efficiently shared.
+
+- **Acknowledgement System:**
+All message types are confirmed by the recipient sending an acknowledgement message to the transmitter. The transmitter keeps resending messages untill an acknowledgement is received or it times out.
+
+- **Supervisor:**
+Each elevator has its own supervisor that keeps tabs on the executable. It detects when the executable is down and automatically restarts it. Used to handle failure states, like loss of motor power and obstruction problems.
 
 ---
 
@@ -54,6 +62,11 @@ The system is built around **Go channels**, which handle all inter-module commun
 
 ---
 
+## **Communication Overview**
+![486748424_9977059018973185_4486015035974998800_n](https://github.com/user-attachments/assets/f8352c70-77c4-40a6-b0a4-2dc53cf4ef64)
+
+---
+
 ## **Setup and Running the Project**
 
 Set up environment variables:
@@ -68,9 +81,3 @@ Set up environment variables:
 
 To start the elevator system:
 - go run main.go
-
-## **Single Elevator Overview**
-![alt text](single_elevator_overview.png)
-
-## **Request handling**
-![alt text](Request_handling.png)

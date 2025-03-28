@@ -64,8 +64,9 @@ Each elevator has its own supervisor that keeps tabs on the executable. It detec
 ---
 
 ## **Hall Button Press Lifecycle**
-Different handling of hall button press based on the source elevator. Slaves 
-![image](https://github.com/user-attachments/assets/648dd91f-71db-43ac-bf82-67c41442e492)
+Different handling of hall button press based on the source elevator. Slaves forward hall call to master while master passes it to order assignment. If master is the best elevator for the order it is passed on to its assignedHallCallChan. If not it is sent on the network via the txAssignmentChan.
+![485081540_840947238219688_7134016836677410224_n](https://github.com/user-attachments/assets/1c4f5583-07be-462f-a256-ce58df9f434a)
+
 
 ---
 

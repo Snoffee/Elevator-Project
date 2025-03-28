@@ -40,17 +40,23 @@ func SendRawHallCall(hallCall elevio.ButtonEvent) {
 // -----------------------------------------------------------------------------
 // Light and Order Status Management
 // -----------------------------------------------------------------------------
-func SendOrderStatus(msg OrderStatusMessage) {
+func SendOrderStatus(msg OrderStatusMessage, orderStatusChan chan OrderStatusMessage) {
 	SeqOrderStatusCounter++
 	msg.SeqNum = SeqOrderStatusCounter
 
-	var redundancyFactor int
-	if msg.Status == Finished {
-		redundancyFactor = MessageRedundancyFactor   // Send Finished messages with higher redundancy
+	//-----------------DONT SEND ORDER STATUS TO SELF (MASTER)----------------------------
+	if config.LocalID == config.MasterID {
+		orderStatusChan <- msg
+	//---------------------------------------------------------------------------------------
 	} else {
-		redundancyFactor = MessageRedundancyFactor
+		var redundancyFactor int
+		if msg.Status == Finished {
+			redundancyFactor = MessageRedundancyFactor   // Send Finished messages with higher redundancy
+		} else {
+			redundancyFactor = MessageRedundancyFactor
+		}
+		go reliablePacketTransmit(msg, txOrderStatusChan, msg.SeqNum, config.MasterID, "Order Status Message", redundancyFactor)
 	}
-	go reliablePacketTransmit(msg, txOrderStatusChan, msg.SeqNum, config.MasterID, "Order Status Message", redundancyFactor)
 }
 
 func SendLightOrder(buttonLight elevio.ButtonEvent, lightOnOrOff LightStatus, statusSenderID string) {

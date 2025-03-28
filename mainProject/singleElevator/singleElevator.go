@@ -119,9 +119,10 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 			fmt.Printf("Clearing delayed opposite direction call: Floor %d, Button %v\n", delayedButtonEvent.Floor, delayedButtonEvent.Button)
 			elevio.SetButtonLamp(delayedButtonEvent.Button, delayedButtonEvent.Floor, false)
 			elevator.Queue[delayedButtonEvent.Floor][delayedButtonEvent.Button] = false
+
+			//Send finished order status message to sync hall button lights
 			msg := communication.OrderStatusMessage{ButtonEvent: delayedButtonEvent, SenderID: config.LocalID, Status: communication.Finished}
-			orderStatusChan <- msg
-			communication.SendOrderStatus(msg)
+			communication.SendOrderStatus(msg, orderStatusChan)
 			MarkAssignmentAsCompleted(msg.SeqNum)
 		}
 		localStatusUpdateChan <- GetElevatorState()	

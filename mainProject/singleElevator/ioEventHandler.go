@@ -20,7 +20,7 @@ func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.Butto
 		
 		floorSensorValue := elevio.GetFloor()
 		// If the elevator is already at the requested floor, process it immediately
-		if (elevator.Floor == event.Floor && floorSensorValue != -1){
+		if (elevator.Floor == event.Floor && floorSensorValue != -1 && elevator.State != config.Moving){
 			fmt.Println("Cab call at current floor, processing immediately...")
 			time.Sleep(3 * time.Second)
 			ProcessFloorArrival(elevator.Floor, orderStatusChan, localStatusUpdateChan)
@@ -121,9 +121,9 @@ func ProcessFloorArrival(floor int, orderStatusChan chan communication.OrderStat
 	elevator.Queue[floor][firstClearButton] = false
 	fmt.Printf("Cleared hall call: Floor %d, Button %v\n", floor, firstClearButton)
 
+	//Send finished order status message to sync hall button lights
 	msg := communication.OrderStatusMessage{ButtonEvent: elevio.ButtonEvent{Floor: floor, Button: firstClearButton}, SenderID: config.LocalID, Status: communication.Finished}
-	orderStatusChan <- msg
-	communication.SendOrderStatus(msg)
+	communication.SendOrderStatus(msg, orderStatusChan)
 	MarkAssignmentAsCompleted(msg.SeqNum)
 
 	// If needed, delay clearing the second button (direction change)

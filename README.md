@@ -21,7 +21,7 @@ The system is built using **Go** and follows a **modular architecture** with cle
 | `peerMonitor`    | Monitors connected elevators and detects failures. |
 | `network`         | Handles peer communication and broadcasts elevator states. |
 | `config`          | Defines shared configurations and constants. |
-| `elevio`          | . |
+| `elevio`          | Bridge between code and physical elevator. |
 | `communication`   | Handles message sending, elevator status updates and generally manages network functionality. |
 | `supervisor`   | Restarts the elevator when it enters a failure state. |
 
@@ -47,21 +47,6 @@ Each elevator has its own supervisor that keeps tabs on the executable. It detec
 
 ---
 
-## **Communication Overview**
-The system is built around **Go channels**, which handle all inter-module communication.
-
-- **Hall calls** from `single_elevator` → Sent to `order_assignment`via `hallCallChan`
-- **Assigned hall calls** → Sent back to `single_elevator` for execution: 
-	- If this elevator is chosen: via `assignedHallCallChan`
-	- If another elevator is chosen: via `network.go`
-- **Elevator states** → Broadcasted via `network.go` through `elevatorStateChan` to:
-	- **Elect master** in `master_election`
-	- **Select an elevator** in `order_assignment` for hall calls
-- **Master election updates** → Sent to `order_assignment` via `masterChan` to ensure only the master assigns orders.
-- **Lost peer detection** -> Sent to `order_assignment` via `lostPeerChan` to reassign lost orders
-
----
-
 ## **Hall Button Press Lifecycle**
 Different handling of hall button press based on the source elevator. Slaves 
 ![486748424_9977059018973185_4486015035974998800_n](https://github.com/user-attachments/assets/f8352c70-77c4-40a6-b0a4-2dc53cf4ef64)
@@ -69,16 +54,16 @@ Different handling of hall button press based on the source elevator. Slaves
 ---
 
 ## **Message Types**
-We made an overview of senders and receivers of messages to keep ping pong packets to a minimum.
+We made an overview of senders and receivers of messages to keep ping pong packets to a minimum. 
 
 The receiver of a message sends AckMessage to sender. 
 
 | 	               | **Sender** | **Receiver** |
 |----------------------|------------|--------------|
-| `LightOrderMessage`  | 👑 | NOT: 👑 and recipient of assignment |
-| `AssignmentMessage` | 👑 | ALL |
-| `RawHallCallMessage` | Slaves | 👑 |
-| `OrderStatusMessage` | ALL | 👑 |
+| `LightOrderMessage`  | Master👑 | NOT: Master👑 and recipient of assignment |
+| `AssignmentMessage` | Master👑 | ALL |
+| `RawHallCallMessage` | Slaves | Master👑 |
+| `OrderStatusMessage` | Slaves (Master via chan) | Master👑 |
 
 Recently received messages are kept in individual maps based on type, to ensure no duplication of execution. Due to our resending mechanism, the same message can be received multiple times if acknowledgment packets are lost on the network. These maps block duplicates from being processed again and potentially causing unwanted behaviour.
 

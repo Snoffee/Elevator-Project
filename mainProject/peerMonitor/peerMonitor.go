@@ -25,6 +25,7 @@ func monitorPeers(peerUpdateChan chan peers.PeerUpdate, lostPeerChan chan string
 
 		for _, lostPeer := range update.Lost {
 			lostPeerChan <- lostPeer
+			localStatusUpdateChan <- singleElevator.GetElevatorState()
 		}
 		for _, newPeer := range update.New {
 			newPeerChan <- newPeer

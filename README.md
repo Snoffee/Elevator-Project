@@ -47,6 +47,21 @@ Each elevator has its own supervisor that keeps tabs on the executable. It detec
 
 ---
 
+## Modules Inputs and Outputs
+
+| Module         | Inputs                                                         | Outputs                                                        |
+|----------------|---------------------------------------------------------------|----------------------------------------------------------------|
+| `singleElevator`| Button Events, Floor Sensor Events, Obstruction Events, Assigned Orders, Network messages (Assignments, Raw Hall Calls, Light Orders, Status Messages). | localStatusUpdate , Sends order status messages, acknowledgments, Operates motors, lamps, and door control. |
+| `orderAssignment`| Elevator Statuses, Master Election Results, Lost/Recovered Peers, Hall Call Requests.  | Sends Assignments, Reassigns Lost Orders, Forwards raw hall calls to master. |
+| `masterElection`| Elevator Statuses.                        | New master. |
+| `peerMonitor`   | Network peer updates (New and Lost).                          | Updates `elevatorStatuses`, Sends notification of lost and recovered peers to `orderAssignment`. |
+| `config`        | `ELEVATOR_ID` and `ELEVATOR_PORT` environment variables.      | Configures `elevio`, Provides `LocalID`, `MasterID`, and constants (`NumFloors`, `NumButtons`). |
+| `elevio`        | Hardware commands (`SetMotorDirection`, `SetButtonLamp`, etc.).| Provides button press events, floor sensor events, obstruction events. Writes to hardware interface. |
+| `communication` |Elevator State Updates, Raw Hall Calls, Assignments, Order Status Messages, Light Orders.  | Ensures reliable transmission of messages with acknowledgments and retries. |
+| `supervisor`    | Fault detection (Timeout events).                             | Forces system shutdown or restart upon detecting faults. |
+
+---
+
 ## **Hall Button Press Lifecycle**
 Different handling of hall button press based on the source elevator. Slaves 
 ![486748424_9977059018973185_4486015035974998800_n](https://github.com/user-attachments/assets/f8352c70-77c4-40a6-b0a4-2dc53cf4ef64)

@@ -70,6 +70,7 @@ func ProcessObstruction(obstructed bool, orderStatusChan chan communication.Orde
 		HandleStateTransition(orderStatusChan)
 	} else {
 		fmt.Println("Obstruction cleared, transitioning to Idle...")
+		obstructionTimer.Stop()
 		doorTimer.Reset(config.DoorOpenTime * time.Second)
 	}
 }

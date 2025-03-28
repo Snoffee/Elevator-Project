@@ -53,7 +53,7 @@ func InitElevator(localStatusUpdateChan chan config.Elevator) {
 	localStatusUpdateChan <- GetElevatorState()
 	fmt.Printf("I'm starting at floor %v\n", elevator.Floor)
 
-	//Opens door every time it reinitializes.
+	//Opens door every time it reinitializes. Ensuring it remains obstructed 
 	elevator.State = config.DoorOpen
 	if elevator.Floor != -1 {
 		elevio.SetDoorOpenLamp(true)

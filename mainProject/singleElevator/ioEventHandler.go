@@ -26,8 +26,8 @@ func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.Butto
 			ProcessFloorArrival(elevator.Floor, orderStatusChan, localStatusUpdateChan)
 			
 			localStatusUpdateChan <- GetElevatorState()
-			} else {
-			HandleStateTransition() 
+			}else{
+			HandleStateTransition(orderStatusChan) 
 		}
 	} else {
 		hallCallChan <- event
@@ -48,23 +48,41 @@ func ProcessFloorArrival(floor int, orderStatusChan chan communication.OrderStat
 	elevator.Floor = floor
 	fmt.Printf("Elevator position updated: Now at Floor %d\n\n", elevator.Floor)
 
-	
-
-	hasUpCall := elevator.Queue[floor][elevio.BT_HallUp]
-	ordersAbove := HasOrdersAbove(elevator)
-	hasDownCall := elevator.Queue[floor][elevio.BT_HallDown]
-	ordersBelow := HasOrdersBelow(elevator)
-	hasCabCall := elevator.Queue[floor][elevio.BT_Cab]
-	hasOnlyOneDirectionInQueue := false
-	if (ordersAbove && !ordersBelow) || (!ordersAbove && ordersBelow){
-		hasOnlyOneDirectionInQueue = true
-	}
-
-
 	fmt.Println("Transitioning from Moving to DoorOpen...")
 	elevator.State = config.DoorOpen
 	elevio.SetDoorOpenLamp(true)
 	doorTimer.Reset(config.DoorOpenTime * time.Second)
+}
+
+func ProcessObstruction(obstructed bool, orderStatusChan chan communication.OrderStatusMessage) {
+	elevator.Obstructed = obstructed
+
+	if elevator.State != config.DoorOpen {
+		return
+	}
+
+	if obstructed{
+		movementTimer.Stop()
+		fmt.Printf("Obstruction detected: %+v\n", obstructed)
+		elevio.SetMotorDirection(elevio.MD_Stop)
+		elevio.SetDoorOpenLamp(true)
+		elevator.State = config.DoorOpen
+		HandleStateTransition(orderStatusChan)
+	} else {
+		fmt.Println("Obstruction cleared, transitioning to Idle...")
+		doorTimer.Reset(config.DoorOpenTime * time.Second)
+	}
+}
+
+func hallCallClearOrder(floor int)(elevio.ButtonType, elevio.ButtonType, bool){
+
+	hasDownCall := elevator.Queue[floor][elevio.BT_HallDown]
+	hasUpCall := elevator.Queue[floor][elevio.BT_HallUp]
+	ordersAbove := HasOrdersAbove(elevator)
+	ordersBelow := HasOrdersBelow(elevator)
+
+	hasCabCall := elevator.Queue[floor][elevio.BT_Cab]
+
 
 	// Clear Cab Call if it exists
 	if hasCabCall {
@@ -72,15 +90,20 @@ func ProcessFloorArrival(floor int, orderStatusChan chan communication.OrderStat
 		elevator.Queue[floor][elevio.BT_Cab] = false
 		fmt.Printf("Cleared cab call: Floor %d\n", floor)
 		if !hasUpCall && !hasDownCall{
-			return
+			return elevio.BT_Cab, elevio.BT_Cab, false
 		}
 	}
 
-	// Decide which direction should be cleared first.
-	
+	hasOnlyOneDirectionInQueue := false
+	if (ordersAbove && !ordersBelow) || (!ordersAbove && ordersBelow){
+		hasOnlyOneDirectionInQueue = true
+	}
+
 	var firstClearButton elevio.ButtonType
 	var secondClearButton elevio.ButtonType
 	shouldDelaySecondClear := false
+	secondClearButton = elevio.BT_Cab
+
 	//Checks for both directions. If true, clears the least prioritized direction first.
 	if hasUpCall && hasDownCall && hasOnlyOneDirectionInQueue{
 		shouldDelaySecondClear = true
@@ -105,15 +128,31 @@ func ProcessFloorArrival(floor int, orderStatusChan chan communication.OrderStat
 		}else if elevator.Direction == elevio.MD_Down{ //If moving in a certain direction, it is prioritized.
 			firstClearButton = elevio.BT_HallDown
 		}else{
-			firstClearButton = elevio.BT_HallDown
+			firstClearButton = elevio.BT_HallDown //Default to prioritize down
 		}
 	}else{
-		if hasUpCall{
+		if hasUpCall && ordersAbove{
 			firstClearButton = elevio.BT_HallUp
-		}else if hasDownCall{
+		}else if hasDownCall && ordersBelow{
 			firstClearButton = elevio.BT_HallDown
+		}else if !ordersAbove && !ordersBelow{
+			if hasUpCall{
+				firstClearButton = elevio.BT_HallUp
+			}else if hasDownCall{
+				firstClearButton = elevio.BT_HallDown
+			}
+		}else{
+			firstClearButton = elevio.BT_Cab
 		}
 		
+	}
+	return firstClearButton, secondClearButton, shouldDelaySecondClear
+}
+
+func clearAllOrdersAtFloor(floor int, orderStatusChan chan communication.OrderStatusMessage, localStatusUpdateChan chan config.Elevator, firstClearButton elevio.ButtonType, secondClearButton elevio.ButtonType, shouldDelaySecondClear bool){
+
+	if(firstClearButton == elevio.BT_Cab){
+		return
 	}
 
 	// Clear the first button immediately (announce direction)
@@ -126,34 +165,25 @@ func ProcessFloorArrival(floor int, orderStatusChan chan communication.OrderStat
 	communication.SendOrderStatus(msg, orderStatusChan)
 	MarkAssignmentAsCompleted(msg.SeqNum)
 
-	// If needed, delay clearing the second button (direction change)
-	if shouldDelaySecondClear {
-		fmt.Println("Keeping door open for an extra 3 seconds before changing direction...")
-		doorTimer.Reset(config.DoorOpenTime * 2 * time.Second)
-		movementTimer.Stop()
-		delayedButtonEvent = elevio.ButtonEvent{Floor: floor, Button: secondClearButton}
-		clearOppositeDirectionTimer.Reset(config.DoorOpenTime * time.Second)
-	} 
-
 	localStatusUpdateChan <- GetElevatorState()
+
 }
 
-func ProcessObstruction(obstructed bool) {
-	elevator.Obstructed = obstructed
-
-	if elevator.State != config.DoorOpen {
-		return
-	}
-
-	if obstructed{
-		movementTimer.Stop()
-		fmt.Printf("Obstruction detected: %+v\n", obstructed)
-		elevio.SetMotorDirection(elevio.MD_Stop)
-		elevio.SetDoorOpenLamp(true)
-		elevator.State = config.DoorOpen
-		HandleStateTransition()
-	} else {
-		fmt.Println("Obstruction cleared, transitioning to Idle...")
-		doorTimer.Reset(config.DoorOpenTime * time.Second)
+func clearLingeringHallCalls(nextDir elevio.MotorDirection, orderStatusChan chan communication.OrderStatusMessage){
+	currentFloor := elevio.GetFloor()
+	if elevator.Queue[currentFloor][elevio.BT_HallDown] == true && nextDir == elevio.MD_Down{
+		elevator.Queue[currentFloor][elevio.BT_HallDown] = false
+		elevio.SetButtonLamp(elevio.BT_HallDown,currentFloor,false)
+		msg := communication.OrderStatusMessage{ButtonEvent: elevio.ButtonEvent{Floor: currentFloor, Button: elevio.BT_HallDown}, SenderID: config.LocalID, Status: communication.Finished}
+		orderStatusChan <- msg
+		go communication.SendOrderStatus(msg)
+		MarkAssignmentAsCompleted(msg.SeqNum)
+	}else if elevator.Queue[currentFloor][elevio.BT_HallUp] == true && nextDir == elevio.MD_Up{
+		elevator.Queue[currentFloor][elevio.BT_HallUp] = false
+		elevio.SetButtonLamp(elevio.BT_HallUp,currentFloor,false)
+		msg := communication.OrderStatusMessage{ButtonEvent: elevio.ButtonEvent{Floor: currentFloor, Button: elevio.BT_HallUp}, SenderID: config.LocalID, Status: communication.Finished}
+		orderStatusChan <- msg
+		go communication.SendOrderStatus(msg)
+		MarkAssignmentAsCompleted(msg.SeqNum)
 	}
 }

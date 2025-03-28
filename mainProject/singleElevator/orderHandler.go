@@ -40,7 +40,7 @@ func handleAssignedHallCall(order elevio.ButtonEvent, orderStatusChan chan commu
 		ProcessFloorArrival(elevator.Floor, orderStatusChan, localStatusUpdateChan)
         localStatusUpdateChan <- GetElevatorState()
     } else {
-        HandleStateTransition()
+        HandleStateTransition(orderStatusChan)
     }
 }
 

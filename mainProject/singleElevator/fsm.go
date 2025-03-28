@@ -2,6 +2,7 @@ package singleElevator
 
 import (
 	"fmt"
+	"mainProject/communication"
 	"mainProject/config"
 	"mainProject/elevio"
 	"os"
@@ -62,9 +63,8 @@ func InitElevator(localStatusUpdateChan chan config.Elevator) {
 }
 
 // Handles state transitions
-func HandleStateTransition() {
+func HandleStateTransition(orderStatusChan chan communication.OrderStatusMessage) {
 	fmt.Printf("Handling state transition from %v\n", elevator.State)
-
 	switch elevator.State {
 	case config.Idle:
 		obstructionTimer.Stop()
@@ -76,6 +76,7 @@ func HandleStateTransition() {
 			movementTimer.Reset(notMovingTimeLimit * time.Second)
 			elevator.State = config.Moving
 			elevator.Direction = nextDir
+			clearLingeringHallCalls(nextDir, orderStatusChan)
 			elevio.SetMotorDirection(nextDir)
 
 		} else {

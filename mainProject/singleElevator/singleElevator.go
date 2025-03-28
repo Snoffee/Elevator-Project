@@ -78,7 +78,7 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 			ProcessButtonPress(buttonEvent, hallCallChan, orderStatusChan, localStatusUpdateChan) 
 
 		case obstructionEvent := <-obstructionSwitch:
-			ProcessObstruction(obstructionEvent) 
+			ProcessObstruction(obstructionEvent, orderStatusChan) 
 		
 		// Hall calls
 		case assignedOrder := <-assignedHallCallChan:
@@ -109,14 +109,25 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 			if !elevator.Obstructed {
 				fmt.Println("Transitioning from DoorOpen to Idle...")
 				elevio.SetDoorOpenLamp(false)
+				firstClearButton, secondClearButton, shouldDelaySecondClear := hallCallClearOrder(elevator.Floor)
+				clearAllOrdersAtFloor(elevator.Floor, orderStatusChan, localStatusUpdateChan, firstClearButton, secondClearButton, shouldDelaySecondClear)
+				if shouldDelaySecondClear{
+					fmt.Println("Keeping door open for an extra 3 seconds before changing direction...")
+					movementTimer.Stop()
+					clearOppositeDirectionTimer.Reset(config.DoorOpenTime * time.Second)
+					elevio.SetDoorOpenLamp(true)
+					delayedButtonEvent = elevio.ButtonEvent{Button: secondClearButton, Floor: elevator.Floor}
+				}else{
 				elevator.State = config.Idle
-				HandleStateTransition()
+				HandleStateTransition(orderStatusChan)
+				}
 			}else{
-				HandleStateTransition()
+				HandleStateTransition(orderStatusChan)
 			}
 
 		case <- clearOppositeDirectionTimer.C:
 			fmt.Printf("Clearing delayed opposite direction call: Floor %d, Button %v\n", delayedButtonEvent.Floor, delayedButtonEvent.Button)
+			elevio.SetDoorOpenLamp(false)
 			elevio.SetButtonLamp(delayedButtonEvent.Button, delayedButtonEvent.Floor, false)
 			elevator.Queue[delayedButtonEvent.Floor][delayedButtonEvent.Button] = false
 
@@ -124,6 +135,8 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 			msg := communication.OrderStatusMessage{ButtonEvent: delayedButtonEvent, SenderID: config.LocalID, Status: communication.Finished}
 			communication.SendOrderStatus(msg, orderStatusChan)
 			MarkAssignmentAsCompleted(msg.SeqNum)
+			elevator.State = config.Idle
+			HandleStateTransition(orderStatusChan)
 		}
 		localStatusUpdateChan <- GetElevatorState()	
 	}

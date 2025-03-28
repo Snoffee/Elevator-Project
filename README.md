@@ -51,13 +51,13 @@ Each elevator has its own supervisor that keeps tabs on the executable. It detec
 
 | Module         | Inputs                                                         | Outputs                                                        |
 |----------------|---------------------------------------------------------------|----------------------------------------------------------------|
-| `singleElevator`| Button Events, Floor Sensor Events, Obstruction Events, Assigned Orders, Network messages (Assignments, Raw Hall Calls, Light Orders, Status Messages). | localStatusUpdate , Sends order status messages, acknowledgments, Operates motors, lamps, and door control. |
-| `orderAssignment`| Elevator Statuses, Master Election Results, Lost/Recovered Peers, Hall Call Requests.  | Sends Assignments, Reassigns Lost Orders, Forwards raw hall calls to master. |
-| `masterElection`| Elevator Statuses.                        | New master. |
-| `peerMonitor`   | Network peer updates (New and Lost).                          | Updates `elevatorStatuses`, Sends notification of lost and recovered peers to `orderAssignment`. |
-| `config`        | `ELEVATOR_ID` and `ELEVATOR_PORT` environment variables.      | Configures `elevio`, Provides `LocalID`, `MasterID`, and constants (`NumFloors`, `NumButtons`). |
-| `elevio`        | Hardware commands (`SetMotorDirection`, `SetButtonLamp`, etc.).| Provides button press events, floor sensor events, obstruction events. Writes to hardware interface. |
-| `communication` |Elevator State Updates, Raw Hall Calls, Assignments, Order Status Messages, Light Orders.  | Ensures reliable transmission of messages with acknowledgments and retries. |
+| `singleElevator`| I/O Events, Assigned Orders, Network messages (Assignments, Raw Hall Calls, Light Orders, Status Messages). | localStatusUpdate , Sends order status messages, acknowledgments, Operates motors, lamps, and door control. |
+| `orderAssignment`| Elevator Statuses, Master Election Results, Lost/Recovered Peers, Hall Call Requests.  | Sends Assignments, Reassigns and restores Lost Orders, Forwards raw hall calls to master. |
+| `masterElection`| Elevator Statuses.                        | New master (`MasterID`). |
+| `peerMonitor`   | Network peer updates (New and Lost).                          | Sends notification of lost and recovered peers to `orderAssignment`. |
+| `config`        | Environment variables.      | Global `LocalID`, `MasterID`, and constants (`NumFloors`, `NumButtons`). Initializes elevator |
+| `elevio`        | Hardware commands.| Provides button press events, floor sensor events, obstruction events. Writes to hardware interface. |
+| `communication` |Elevator Status Updates, Order Status, Acks.  | Ensures reliable transmission of messages with acknowledgments and retries. Broadcasts Elevator Statuses periodically and in bursts at critical events |
 | `supervisor`    | Fault detection (Timeout events).                             | Forces system shutdown or restart upon detecting faults. |
 
 ---

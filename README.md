@@ -48,6 +48,7 @@ Each elevator has its own supervisor that keeps tabs on the executable. It detec
 ---
 
 ## Modules Inputs and Outputs
+(Network module excluded as it only provides framework for UDP broadcasting)
 
 | Module         | Inputs                                                         | Outputs                                                        |
 |----------------|---------------------------------------------------------------|----------------------------------------------------------------|

@@ -65,7 +65,7 @@ Each elevator has its own supervisor that keeps tabs on the executable. It detec
 
 ## **Hall Button Press Lifecycle**
 Different handling of hall button press based on the source elevator. Slaves 
-![486748424_9977059018973185_4486015035974998800_n](https://github.com/user-attachments/assets/f8352c70-77c4-40a6-b0a4-2dc53cf4ef64)
+![image](https://github.com/user-attachments/assets/648dd91f-71db-43ac-bf82-67c41442e492)
 
 ---
 

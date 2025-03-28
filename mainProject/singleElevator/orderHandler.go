@@ -232,14 +232,14 @@ func clearLingeringHallCalls(nextDir elevio.MotorDirection, orderStatusChan chan
 		elevio.SetButtonLamp(elevio.BT_HallDown,currentFloor,false)
 		msg := communication.OrderStatusMessage{ButtonEvent: elevio.ButtonEvent{Floor: currentFloor, Button: elevio.BT_HallDown}, SenderID: config.LocalID, Status: communication.Finished}
 		orderStatusChan <- msg
-		go communication.SendOrderStatus(msg)
+		go communication.SendOrderStatus(msg, orderStatusChan)
 		MarkAssignmentAsCompleted(msg.SeqNum)
 	}else if elevator.Queue[currentFloor][elevio.BT_HallUp] == true && nextDir == elevio.MD_Up{
 		elevator.Queue[currentFloor][elevio.BT_HallUp] = false
 		elevio.SetButtonLamp(elevio.BT_HallUp,currentFloor,false)
 		msg := communication.OrderStatusMessage{ButtonEvent: elevio.ButtonEvent{Floor: currentFloor, Button: elevio.BT_HallUp}, SenderID: config.LocalID, Status: communication.Finished}
 		orderStatusChan <- msg
-		go communication.SendOrderStatus(msg)
+		go communication.SendOrderStatus(msg, orderStatusChan)
 		MarkAssignmentAsCompleted(msg.SeqNum)
 	}
 }

@@ -51,13 +51,13 @@ Each elevator has its own supervisor that keeps tabs on the executable. It detec
 
 | Module         | Inputs                                                         | Outputs                                                        |
 |----------------|---------------------------------------------------------------|----------------------------------------------------------------|
-| `singleElevator`| I/O Events, Assigned Orders, Network messages (Assignments, Raw Hall Calls, Light Orders, Status Messages). | localStatusUpdate , Sends order status messages, acknowledgments, Operates motors, lamps, and door control. |
+| `singleElevator`| I/O Events, Network messages (Assignments, Raw Hall Calls, Light Orders, Status Messages). | localStatusUpdate , Sends order status messages, acknowledgments, Operates motors, lamps, and door control. |
 | `orderAssignment`| Elevator Statuses, Master Election Results, Lost/Recovered Peers, Hall Call Requests.  | Sends Assignments, Reassigns and restores Lost Orders, Forwards raw hall calls to master. |
-| `masterElection`| Elevator Statuses.                        | New master (`MasterID`). |
-| `peerMonitor`   | Network peer updates (New and Lost).                          | Sends notification of lost and recovered peers to `orderAssignment`. |
-| `config`        | Environment variables.      | Global `LocalID`, `MasterID`, and constants (`NumFloors`, `NumButtons`). Initializes elevator |
+| `masterElection`| Elevator Statuses.                        				| New master (`MasterID`). |
+| `peerMonitor`   | Network peer updates (New and Lost).                        	  | Sends notification of lost and recovered peers to `orderAssignment`. |
+| `config`        | Environment variables.     						 | Global `LocalID`, `MasterID`, and constants (`NumFloors`, `NumButtons`). Initializes elevator |
 | `elevio`        | Hardware commands.| Provides button press events, floor sensor events, obstruction events. Writes to hardware interface. |
-| `communication` |Elevator Status Updates, Order Status, Acks.  | Ensures reliable transmission of messages with acknowledgments and retries. Broadcasts Elevator Statuses periodically and in bursts at critical events |
+| `communication` |Elevator Status Updates, Order Status, Acks. 			 | Ensures reliable transmission of messages with acknowledgments and retries. Broadcasts Elevator Statuses periodically and in bursts at critical events |
 | `supervisor`    | Fault detection (Timeout events).                             | Forces system shutdown or restart upon detecting faults. |
 
 ---

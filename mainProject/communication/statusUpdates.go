@@ -31,7 +31,6 @@ func UpdateElevatorStates(newPeers []string, lostPeers []string) {
 	}
 }
 
-// Returns the backup state of lost elevators for cab call reassignment.
 func GetBackupState() map[string]ElevatorStatus {
 	return backupElevatorStatuses
 }
@@ -64,7 +63,7 @@ func BroadcastElevatorStatus(e config.Elevator, isCriticalEvent bool) {
         Queue:     e.Queue,
         Timestamp: time.Now(),
     }
-    elevatorStatuses[config.LocalID] = localElevatorStatus  // Always update the local map
+    elevatorStatuses[config.LocalID] = localElevatorStatus
     stateMutex.Unlock()
 
     redundancyFactor := 3  // For periodic broadcasts

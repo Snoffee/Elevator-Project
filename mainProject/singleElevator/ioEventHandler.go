@@ -8,7 +8,6 @@ import (
 	"time"
 )
 
-// Handles button press events
 func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.ButtonEvent, orderStatusChan chan communication.OrderStatusMessage, localStatusUpdateChan chan config.Elevator) {
 	fmt.Printf("Button pressed: %+v\n\n", event)
 	
@@ -18,15 +17,15 @@ func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.Butto
 		elevio.SetButtonLamp(event.Button, event.Floor, true)
 		localStatusUpdateChan <- GetElevatorState()
 		
-		floorSensorValue := elevio.GetFloor()
 		// If the elevator is already at the requested floor, process it immediately
+		floorSensorValue := elevio.GetFloor()
 		if (elevator.Floor == event.Floor && floorSensorValue != -1 && elevator.State != config.Moving){
 			fmt.Println("Cab call at current floor, processing immediately...")
 			time.Sleep(3 * time.Second)
 			ProcessFloorArrival(elevator.Floor, orderStatusChan, localStatusUpdateChan)
 			
 			localStatusUpdateChan <- GetElevatorState()
-			}else{
+		}else{
 			HandleStateTransition(orderStatusChan) 
 		}
 	} else {
@@ -34,7 +33,6 @@ func ProcessButtonPress(event elevio.ButtonEvent, hallCallChan chan elevio.Butto
 	}
 }
 
-// Handles floor sensor events
 func ProcessFloorArrival(floor int, orderStatusChan chan communication.OrderStatusMessage, localStatusUpdateChan chan config.Elevator) {
 	fmt.Printf("Floor sensor triggered: %+v\n", floor)
 	elevio.SetFloorIndicator(floor)
@@ -60,7 +58,6 @@ func ProcessObstruction(obstructed bool, orderStatusChan chan communication.Orde
 	if elevator.State != config.DoorOpen {
 		return
 	}
-
 	if obstructed{
 		movementTimer.Stop()
 		fmt.Printf("Obstruction detected: %+v\n", obstructed)
@@ -77,14 +74,11 @@ func ProcessObstruction(obstructed bool, orderStatusChan chan communication.Orde
 
 //Used after HandleFloorArrival to decide which orders are cleared
 func hallCallClearOrder(floor int)(elevio.ButtonType, elevio.ButtonType, bool){
-
 	hasDownCall := elevator.Queue[floor][elevio.BT_HallDown]
-	hasUpCall := elevator.Queue[floor][elevio.BT_HallUp]
+	hasUpCall   := elevator.Queue[floor][elevio.BT_HallUp]
 	ordersAbove := HasOrdersAbove(elevator)
 	ordersBelow := HasOrdersBelow(elevator)
-
-	hasCabCall := elevator.Queue[floor][elevio.BT_Cab]
-
+	hasCabCall  := elevator.Queue[floor][elevio.BT_Cab]
 
 	// Clear Cab Call if it exists
 	if hasCabCall {
@@ -95,7 +89,6 @@ func hallCallClearOrder(floor int)(elevio.ButtonType, elevio.ButtonType, bool){
 			return elevio.BT_Cab, elevio.BT_Cab, false
 		}
 	}
-
 	hasOnlyOneDirectionInQueue := false
 	if (ordersAbove && !ordersBelow) || (!ordersAbove && ordersBelow){
 		hasOnlyOneDirectionInQueue = true
@@ -106,7 +99,10 @@ func hallCallClearOrder(floor int)(elevio.ButtonType, elevio.ButtonType, bool){
 	shouldDelaySecondClear := false
 	secondClearButton = elevio.BT_Cab
 
-	//Checks for both directions. If true, clears the least prioritized direction first.
+	//There are a lot of edge cases that must be considered, and a large if/else block is therefore required.
+
+	//Checks for the project description case of only one of the two ordered directions having other orders.
+
 	if hasUpCall && hasDownCall && hasOnlyOneDirectionInQueue{
 		shouldDelaySecondClear = true
 		if elevator.Direction == elevio.MD_Up && ordersAbove{ //If moving in a certain direction, it is prioritized.
@@ -124,6 +120,7 @@ func hallCallClearOrder(floor int)(elevio.ButtonType, elevio.ButtonType, bool){
 				secondClearButton = elevio.BT_HallUp
 			}
 		}
+	//There is no specific requirement in the description. Our system therefore only services one direction if no other orders are present.
 	}else if hasUpCall && hasDownCall{
 		if elevator.Direction == elevio.MD_Up{ //If moving in a certain direction, it is prioritized.
 			firstClearButton = elevio.BT_HallUp
@@ -132,6 +129,7 @@ func hallCallClearOrder(floor int)(elevio.ButtonType, elevio.ButtonType, bool){
 		}else{
 			firstClearButton = elevio.BT_HallDown //Default to prioritize down
 		}
+		//More typical scenario with hall order in only one direction.
 	}else{
 		if hasUpCall && ordersAbove{
 			firstClearButton = elevio.BT_HallUp
@@ -144,7 +142,7 @@ func hallCallClearOrder(floor int)(elevio.ButtonType, elevio.ButtonType, bool){
 				firstClearButton = elevio.BT_HallDown
 			}
 		}else{
-			firstClearButton = elevio.BT_Cab
+			firstClearButton = elevio.BT_Cab //Sets to cab to signalize no hall orders need to be cleared
 		}
 		
 	}
@@ -157,7 +155,6 @@ func clearAllOrdersAtFloor(floor int, orderStatusChan chan communication.OrderSt
 	if(firstClearButton == elevio.BT_Cab){
 		return
 	}
-
 	// Clear the first button immediately (announce direction)
 	elevio.SetButtonLamp(firstClearButton, floor, false)
 	elevator.Queue[floor][firstClearButton] = false

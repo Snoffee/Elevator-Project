@@ -107,7 +107,6 @@ func getReassignedCabCalls(recoveredElevator string, backupElevatorStates map[st
 }
 
 // Determines the best available elevator based on cost function
-
 func findBestElevator(order elevio.ButtonEvent, elevatorStatuses map[string]communication.ElevatorStatus, excludeElevator string) string {
 	fmt.Printf("Available elevators: %v\n\n", elevatorStatuses)
 	bestElevator := ""

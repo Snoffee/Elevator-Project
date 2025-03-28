@@ -86,13 +86,13 @@ var (
 	elevatorStatuses        = make(map[string]ElevatorStatus) // Global map to track all known elevators
 	backupElevatorStatuses  = make(map[string]ElevatorStatus)
 	
-	txElevatorStatusChan    = make(chan ElevatorStatus, 50) // Global transmitter channel
-	rxElevatorStatusChan    = make(chan ElevatorStatus, 50) // Global receiver channel
-	txAssignmentChan        = make(chan AssignmentMessage, 100) // Global channel for assignments
-	txRawHallCallChan       = make(chan RawHallCallMessage, 100) // Slaves send hall call events to master
-	txLightChan	            = make(chan LightOrderMessage, 50) // transmit light orders
-	rxOrderStatusChan       = make(chan OrderStatusMessage, 100) // Receive confirmation of hall calls
-	txOrderStatusChan       = make(chan OrderStatusMessage, 100) // Transmit confirmation of hall calls
+	txElevatorStatusChan    = make(chan ElevatorStatus, 50)
+	rxElevatorStatusChan    = make(chan ElevatorStatus, 50)
+	txAssignmentChan        = make(chan AssignmentMessage, 100)
+	txRawHallCallChan       = make(chan RawHallCallMessage, 100)
+	txLightChan	            = make(chan LightOrderMessage, 50)
+	rxOrderStatusChan       = make(chan OrderStatusMessage, 100)
+	txOrderStatusChan       = make(chan OrderStatusMessage, 100)
 	rxAckChan				= make(chan AckMessage, 500)
 	
 	seqNumAssignmentCounter = 0
@@ -103,11 +103,6 @@ var (
 	stateMutex	              sync.Mutex
 	pendingAcks   		    = make(map[int]chan struct{})
     pendingAcksMutex 		  sync.Mutex
-
-	MessageMaxRetries          = 5
-    MessageRedundancyFactor    = 4
-    MessageRetryInterval       = 200 * time.Millisecond
-    MessageExponentialBackoff  = 2
 )
 
 // -----------------------------------------------------------------------------
@@ -149,7 +144,6 @@ func RunCommunication(elevatorStateChan chan map[string]ElevatorStatus, peerUpda
 
 			case ack := <- rxAckChan:
 				pendingAcksMutex.Lock()
-				//fmt.Printf("Sequence number: %d, Traget id: %s \n", ack.SeqNum, ack.TargetID)
 				if ackChan, exists := pendingAcks[ack.SeqNum]; exists {
 					close(ackChan)
 					delete(pendingAcks, ack.SeqNum)
@@ -159,7 +153,7 @@ func RunCommunication(elevatorStateChan chan map[string]ElevatorStatus, peerUpda
 			case orderStatus := <-rxOrderStatusChan:
 				orderStatusChan <- orderStatus
 			
-			case hallAssignment := <-rxElevatorStatusChan: // Handling incoming elevator statuses directly
+			case hallAssignment := <-rxElevatorStatusChan:
 				stateMutex.Lock()
 				elevatorStatuses[hallAssignment.ID] = hallAssignment
 				stateMutex.Unlock()

@@ -16,7 +16,7 @@ type PeerUpdate struct {
 }
 
 const interval = 15 * time.Millisecond
-const timeout = 3000 * time.Millisecond
+const timeout = 2000 * time.Millisecond
 
 func Transmitter(port int, id string, transmitEnable <-chan bool) {
 
@@ -68,7 +68,7 @@ func Receiver(port int, peerUpdateCh chan<- PeerUpdate) {
 		// Removing dead connection
 		p.Lost = make([]string, 0)
 		for peer, lastTime := range lastSeen {
-			if time.Since(lastTime) > timeout && peer != config.LocalID{ // Ignore not receiving from self
+			if time.Since(lastTime) > timeout && peer != config.LocalID{ // An elevator should not remove itself from the network
 				updated = true
 				p.Lost = append(p.Lost, peer)
 				delete(lastSeen, peer)

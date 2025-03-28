@@ -15,7 +15,6 @@ func GetElevatorState() config.Elevator {
 	return elevator
 }
 
-// Initialize Elevator
 func InitElevator(localStatusUpdateChan chan config.Elevator) {
 
 	elevator = config.Elevator{
@@ -25,6 +24,7 @@ func InitElevator(localStatusUpdateChan chan config.Elevator) {
 		Obstructed: false,
 		Queue:      [config.NumFloors][config.NumButtons]bool{}, 
 	}
+	//Clearing all button lights
 	for f := 0; f < config.NumFloors; f++ {
 		for b := 0; b < config.NumButtons; b++ {
 			button := elevio.ButtonType(b)
@@ -33,8 +33,7 @@ func InitElevator(localStatusUpdateChan chan config.Elevator) {
 	}
 
 	elevator.Obstructed = elevio.GetObstruction()
-
-	//Correctly sets current floor. Moves elevator down to floor below if between floors.
+	//Correctly sets current floor. Moves elevator down to floor below if between floors
 	floor := elevio.GetFloor()
 	fmt.Printf("Read initial floor as %v\n", floor)
 	switch floor{
@@ -43,7 +42,6 @@ func InitElevator(localStatusUpdateChan chan config.Elevator) {
 			elevio.SetMotorDirection(elevio.MD_Down)
 		}
 		elevio.SetMotorDirection(elevio.MD_Stop)
-		fmt.Printf("My motordirection is: %v\n", elevator.Direction)
 		elevator.Floor = elevio.GetFloor()
 		
 	default:
@@ -53,7 +51,7 @@ func InitElevator(localStatusUpdateChan chan config.Elevator) {
 	localStatusUpdateChan <- GetElevatorState()
 	fmt.Printf("I'm starting at floor %v\n", elevator.Floor)
 
-	//Opens door every time it reinitializes. Ensuring it remains obstructed 
+	//Door is open on reinitialization to make sure the door does not close and continue as normal if an obstruction is present
 	elevator.State = config.DoorOpen
 	if elevator.Floor != -1 {
 		elevio.SetDoorOpenLamp(true)
@@ -62,7 +60,6 @@ func InitElevator(localStatusUpdateChan chan config.Elevator) {
 	}
 }
 
-// Handles state transitions
 func HandleStateTransition(orderStatusChan chan communication.OrderStatusMessage) {
 	fmt.Printf("Handling state transition from %v\n", elevator.State)
 	switch elevator.State {
@@ -72,11 +69,11 @@ func HandleStateTransition(orderStatusChan chan communication.OrderStatusMessage
 		fmt.Printf("ChooseDirection() returned: %v\n", nextDir) 
 		if nextDir != elevio.MD_Stop {
 			fmt.Println("Transitioning from Idle to Moving...")
-			// Cancel previous timeout and start a new one
+	
 			movementTimer.Reset(notMovingTimeLimit * time.Second)
 			elevator.State = config.Moving
 			elevator.Direction = nextDir
-			clearLingeringHallCalls(nextDir, orderStatusChan)
+			clearLingeringHallCalls(nextDir, orderStatusChan) //Checks whether we should clear an "old" hall call that has not serviced any cab orders yet.
 			elevio.SetMotorDirection(nextDir)
 
 		} else {

@@ -8,7 +8,7 @@ import (
 )
 
 const(
-	travelTime = 5 //Seconds. Around 2 for simulator, around - for physical elevator
+	travelTime = 3 //Seconds
 )
 
 func cost(elevator communication.ElevatorStatus, order elevio.ButtonEvent) int{
@@ -37,7 +37,7 @@ func cost(elevator communication.ElevatorStatus, order elevio.ButtonEvent) int{
 		timeToCompleteOrders += config.DoorOpenTime/2 //Assumes door has been open for half the required time
 	}
 	
-	//simulates the time it takes to complete orders for the given elevator
+	//Simulates the time it takes to complete orders for the given elevator
 	for {
 		if shouldStopAtFloor(e) {
 			clearCurrentFloorFromQueue(&e)

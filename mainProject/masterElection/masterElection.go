@@ -21,7 +21,7 @@ func RunMasterElection(elevatorStateChan chan map[string]communication.ElevatorS
 	}()
 }
 
-// Elect Master: Assign the lowest ID as master
+// Assign the lowest ID as master
 func determineMaster(elevatorStates map[string]communication.ElevatorStatus, localID string) string{
 	lowestID := localID
 	for id := range elevatorStates {

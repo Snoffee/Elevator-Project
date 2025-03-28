@@ -62,14 +62,13 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 	// Periodic Broadcast - Continuously broadcasts the elevator status to other elevators
     go func() {
         for {
-            time.Sleep(1 * time.Second) 
+            time.Sleep(1 * time.Second)
 			localStatusUpdateChan <- GetElevatorState()        
 		}
     }()
 
-	// Event Loop
 	for {
-		// Hardware
+		// I/O events
 		select {
 		case floorEvent := <-floorSensor:
 			ProcessFloorArrival(floorEvent, orderStatusChan, localStatusUpdateChan) 
@@ -100,10 +99,10 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 
 		// Timers
 		case <- movementTimer.C:
-			forceShutdown("power loss")
+			forceShutdown("Power Loss")
 
 		case <- obstructionTimer.C:
-			forceShutdown("obstructed too long")
+			forceShutdown("Obstructed too Long")
 		
 		case <- doorTimer.C:
 			if !elevator.Obstructed {

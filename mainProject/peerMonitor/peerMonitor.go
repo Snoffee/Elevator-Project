@@ -8,7 +8,6 @@ import (
 	"mainProject/singleElevator"
 )
 
-// Runs MonitorPeers as a Goroutine
 func RunMonitorPeers(peerUpdateChan chan peers.PeerUpdate, lostPeerChan chan string, newPeerChan chan string, localStatusUpdateChan chan config.Elevator) {
 	go monitorPeers(peerUpdateChan, lostPeerChan, newPeerChan, localStatusUpdateChan)
 	

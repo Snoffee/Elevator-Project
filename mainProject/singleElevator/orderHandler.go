@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-// Maps To Track Recent Messages
+// Maps To Track Recent Messages to block duplicates
 var (
 	recentAssignments         = make(map[int]time.Time)
 	recentRawHallCalls 		  = make(map[int]time.Time)
@@ -51,6 +51,7 @@ func handleAssignedRawHallCall(rawCall communication.RawHallCallMessage, hallCal
     if config.LocalID != config.MasterID {
         return
     }
+    //Blocks duplicates to avoid processing the same message twice
 	recentMessagesMutex.Lock()
 	if _, exists := recentRawHallCalls[rawCall.SeqNum]; exists {
         fmt.Printf("[Duplicate Detected] Ignoring duplicate Raw Hall Call: Floor %d, Button %v | SeqNum: %d\n", rawCall.Floor, rawCall.Button, rawCall.SeqNum)
@@ -61,14 +62,13 @@ func handleAssignedRawHallCall(rawCall communication.RawHallCallMessage, hallCal
 	recentMessagesMutex.Unlock()
 
     // Send acknowledgment
+    fmt.Printf("Received raw hall call for me from a slave: Floor %d, Button %v\n\n", rawCall.Floor, rawCall.Button)
     ackMsg:= communication.AckMessage{TargetID: rawCall.SenderID, SeqNum: rawCall.SeqNum}
 	fmt.Printf("Broadcasting ack for RawHallCall to sender: %s | SeqNum: %d\n\n", ackMsg.TargetID, ackMsg.SeqNum)
 	for i := 0; i < 3; i++ {
 		txAckChan <- ackMsg
 		time.Sleep(20 * time.Millisecond)
 	}
-
-	fmt.Printf("Processing raw hall call: Floor %d, Button %d\n", rawCall.Floor, rawCall.Button)
 	hallCallChan <- elevio.ButtonEvent{Floor: rawCall.Floor, Button: rawCall.Button}
 }
 
@@ -80,6 +80,7 @@ func handleAssignedNetworkHallCall(msg communication.AssignmentMessage, orderSta
 	if msg.TargetID != config.LocalID {
         return
     }
+    //Blocks duplicates to avoid processing the same message twice
 	recentMessagesMutex.Lock()
     if _, exists := recentAssignments[msg.SeqNum]; exists {
         fmt.Printf("[Duplicate Detected - recentAssignments] Ignoring duplicate assignment: Floor %d, Button %v | SeqNum: %d\n", msg.Floor, msg.Button, msg.SeqNum)
@@ -107,6 +108,7 @@ func handleLightOrder(lightOrder communication.LightOrderMessage, txAckChan chan
     if lightOrder.TargetID != config.LocalID {
         return
     }
+    //Blocks duplicates to avoid processing the same message twice
 	recentMessagesMutex.Lock()
     if _, exists := recentLightOrderMessages[lightOrder.SeqNum]; exists {
         fmt.Printf("[Duplicate Detected] Ignoring duplicate Light Order | SeqNum: %d\n", lightOrder.SeqNum)
@@ -137,12 +139,13 @@ func handleLightOrder(lightOrder communication.LightOrderMessage, txAckChan chan
 }
 
 // -----------------------------------------------------------------------------
-// Receiving Orders Status Messages (Only for master)
+// Receiving Order Status Messages (Only for master)
 // -----------------------------------------------------------------------------
 func handleOrderStatus(status communication.OrderStatusMessage, txAckChan chan communication.AckMessage) {
     if config.MasterID != config.LocalID {
         return  // Only the master should process OrderStatusMessages
     }
+    //Blocks duplicates to avoid processing the same message twice
 	recentMessagesMutex.Lock()
     if _, exists := recentOrderStatusMessages[status.SeqNum]; exists {
         fmt.Printf("[Duplicate Detected] Ignoring duplicate Order Status | SeqNum: %d\n", status.SeqNum)
@@ -152,9 +155,8 @@ func handleOrderStatus(status communication.OrderStatusMessage, txAckChan chan c
     recentOrderStatusMessages[status.SeqNum] = time.Now()
 	recentMessagesMutex.Unlock()
 
-    // Send acknowledgment. Multiple to handle packet loss better.
-    //-----------------DONT SEND ACK FOR ORDER STATUS TO SELF (MASTER)----------------------------
-    if status.SenderID != config.MasterID {
+    // Send acknowledgment
+    if status.SenderID != config.MasterID { //Master should not transmit to itself on the network
         ackMsg := communication.AckMessage{TargetID: config.MasterID, SeqNum: status.SeqNum}
         for i := 0; i < 10; i++ {
             txAckChan <- ackMsg
@@ -163,20 +165,21 @@ func handleOrderStatus(status communication.OrderStatusMessage, txAckChan chan c
         }
     }
 	
-    // Process the status message
+    // Process the status message and update lights accordingly
     if status.Status == communication.Unfinished {
         fmt.Printf("Received unfinished order status from elevator %s\n", status.SenderID)
         elevio.SetButtonLamp(status.ButtonEvent.Button, status.ButtonEvent.Floor, true)
 		communication.SendLightOrder(status.ButtonEvent, communication.On, status.SenderID)
-		fmt.Printf("Turned on order hall light for all elevators\n\n")
+		fmt.Printf("Turned ON order hall light for all elevators\n\n")
     } else if status.Status == communication.Finished {
         fmt.Printf("Received finished order status from elevator %s\n", status.SenderID)
         elevio.SetButtonLamp(status.ButtonEvent.Button, status.ButtonEvent.Floor, false)
 		communication.SendLightOrder(status.ButtonEvent, communication.Off, status.SenderID)
-		fmt.Printf("Turned off order hall light for all elevators\n\n")
+		fmt.Printf("Turned OFF order hall light for all elevators\n\n")
     }
 }
 
+//Clears recently processed messages regularly
 func flushRecentMessages() {
     const messageTimeout = 10 * time.Second
     for {
@@ -230,15 +233,15 @@ func clearLingeringHallCalls(nextDir elevio.MotorDirection, orderStatusChan chan
 	if elevator.Queue[currentFloor][elevio.BT_HallDown] && nextDir == elevio.MD_Down{
 		elevator.Queue[currentFloor][elevio.BT_HallDown] = false
 		elevio.SetButtonLamp(elevio.BT_HallDown,currentFloor,false)
+        //Send finished order status message to sync hall light buttons
 		msg := communication.OrderStatusMessage{ButtonEvent: elevio.ButtonEvent{Floor: currentFloor, Button: elevio.BT_HallDown}, SenderID: config.LocalID, Status: communication.Finished}
-		orderStatusChan <- msg
 		go communication.SendOrderStatus(msg, orderStatusChan)
 		MarkAssignmentAsCompleted(msg.SeqNum)
 	}else if elevator.Queue[currentFloor][elevio.BT_HallUp] && nextDir == elevio.MD_Up{
 		elevator.Queue[currentFloor][elevio.BT_HallUp] = false
 		elevio.SetButtonLamp(elevio.BT_HallUp,currentFloor,false)
+        //Send finished order status message to sync hall light buttons
 		msg := communication.OrderStatusMessage{ButtonEvent: elevio.ButtonEvent{Floor: currentFloor, Button: elevio.BT_HallUp}, SenderID: config.LocalID, Status: communication.Finished}
-		orderStatusChan <- msg
 		go communication.SendOrderStatus(msg, orderStatusChan)
 		MarkAssignmentAsCompleted(msg.SeqNum)
 	}

@@ -11,7 +11,7 @@ ELEVATOR_ID=${1:-"elevator_1"}   # Default to "elevator_1" if not provided
 ELEVATOR_PORT=${2:-"15657"}      # Default to "15657" if not provided
 
 echo "Starting Simulator for $ELEVATOR_ID on port $ELEVATOR_PORT..."
-gnome-terminal -- bash -c "export SERVER_PORT=$ELEVATOR_PORT; simelevatorserver; exec bash" #elevatorserver or filepath to sim ./SimElevatorServer
+gnome-terminal -- bash -c "export SERVER_PORT=$ELEVATOR_PORT; elevatorserver; exec bash" #elevatorserver or filepath to sim ./SimElevatorServer
 
 sleep 2
 

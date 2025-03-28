@@ -71,7 +71,7 @@ func restartElevator(elevatorID string) {
         psCommand := fmt.Sprintf(`Start-Process powershell -WindowStyle Normal -ArgumentList '-Command', 'cd ..; $env:ELEVATOR_ID=\"%s\"; $env:ELEVATOR_PORT=\"%s\"; ./elevator_%s.exe'`, elevatorID, elevatorPort, elevatorID)
         cmd = exec.Command("powershell", "-Command", psCommand)
     } else if runtime.GOOS == "linux" {
-        bashCommand := fmt.Sprintf(`cd .. && ELEVATOR_ID="%s" ELEVATOR_PORT="%s" ./elevator_%s`, elevatorID, elevatorPort, elevatorID)
+        bashCommand := fmt.Sprintf(`cd ../.. && ELEVATOR_ID="%s" ELEVATOR_PORT="%s" ./elevator_%s`, elevatorID, elevatorPort, elevatorID)
         cmd = exec.Command("gnome-terminal", "--", "bash", "-c", bashCommand)
 	}
 	cmd.Stdout = os.Stdout

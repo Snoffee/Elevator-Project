@@ -130,9 +130,10 @@ func RunSingleElevator(hallCallChan chan elevio.ButtonEvent, assignedHallCallCha
 			elevio.SetDoorOpenLamp(false)
 			elevio.SetButtonLamp(delayedButtonEvent.Button, delayedButtonEvent.Floor, false)
 			elevator.Queue[delayedButtonEvent.Floor][delayedButtonEvent.Button] = false
+
+			//Send finished order status message to sync hall button lights
 			msg := communication.OrderStatusMessage{ButtonEvent: delayedButtonEvent, SenderID: config.LocalID, Status: communication.Finished}
-			orderStatusChan <- msg
-			communication.SendOrderStatus(msg)
+			communication.SendOrderStatus(msg, orderStatusChan)
 			MarkAssignmentAsCompleted(msg.SeqNum)
 			elevator.State = config.Idle
 			HandleStateTransition(orderStatusChan)
